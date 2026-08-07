@@ -21,6 +21,13 @@ bash -n \
     "${repo_dir}/src/freeze-watch"
 
 python3 -m py_compile "${repo_dir}/src/freeze_watch.py"
+python3 - <<PY
+from pathlib import Path
+from xml.etree import ElementTree
+
+for icon in Path("${repo_dir}/assets/icons").rglob("*.svg"):
+    ElementTree.parse(icon)
+PY
 python3 -m unittest discover -s "${repo_dir}/tests" -v
 
 if command -v shellcheck >/dev/null 2>&1; then
@@ -48,6 +55,9 @@ test -x "${test_root}/home/.local/bin/freeze-monitor"
 test -x "${test_root}/home/.local/bin/freeze-watch"
 test -f "${test_root}/home/.config/systemd/user/freeze-watch.service"
 test -f "${test_root}/home/.local/share/applications/com.raybird.FreezeWatch.desktop"
+test -f "${test_root}/home/.local/share/icons/hicolor/scalable/apps/com.raybird.FreezeWatch.svg"
+test -f "${test_root}/home/.local/share/icons/hicolor/symbolic/apps/com.raybird.FreezeWatch-symbolic.svg"
+test -f "${test_root}/home/.local/share/icons/hicolor/symbolic/apps/com.raybird.FreezeWatch-warning-symbolic.svg"
 test "$(< "${test_root}/home/.config/freeze-watch/env")" = \
     "FREEZE_WATCH_COMPOSE_PROJECT=example"
 
@@ -68,4 +78,7 @@ XDG_STATE_HOME="${test_root}/home/.local/state" \
 
 test ! -e "${test_root}/home/.local/bin/freeze-watch"
 test ! -e "${test_root}/home/.local/share/applications/com.raybird.FreezeWatch.desktop"
+test ! -e "${test_root}/home/.local/share/icons/hicolor/scalable/apps/com.raybird.FreezeWatch.svg"
+test ! -e "${test_root}/home/.local/share/icons/hicolor/symbolic/apps/com.raybird.FreezeWatch-symbolic.svg"
+test ! -e "${test_root}/home/.local/share/icons/hicolor/symbolic/apps/com.raybird.FreezeWatch-warning-symbolic.svg"
 printf 'All checks passed.\n'

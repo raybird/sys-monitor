@@ -8,6 +8,7 @@ readonly bin_dir="${user_home}/.local/bin"
 readonly data_home="${XDG_DATA_HOME:-${user_home}/.local/share}"
 readonly data_dir="${data_home}/freeze-watch"
 readonly applications_dir="${data_home}/applications"
+readonly icon_theme_dir="${data_home}/icons/hicolor"
 readonly config_home="${XDG_CONFIG_HOME:-${user_home}/.config}"
 readonly unit_dir="${config_home}/systemd/user"
 readonly app_config_dir="${config_home}/freeze-watch"
@@ -88,7 +89,8 @@ if ((no_start == 0)); then
 fi
 
 install -d -m 0755 \
-    "${bin_dir}" "${data_dir}" "${applications_dir}" "${unit_dir}" "${app_config_dir}"
+    "${bin_dir}" "${data_dir}" "${applications_dir}" "${unit_dir}" "${app_config_dir}" \
+    "${icon_theme_dir}/scalable/apps" "${icon_theme_dir}/symbolic/apps"
 install -m 0755 "${script_dir}/src/freeze-monitor" "${bin_dir}/freeze-monitor"
 install -m 0755 "${script_dir}/src/freeze-monitor-maintain" "${bin_dir}/freeze-monitor-maintain"
 install -m 0755 "${script_dir}/src/freeze-watch" "${bin_dir}/freeze-watch"
@@ -96,6 +98,13 @@ install -m 0755 "${script_dir}/src/freeze_watch.py" "${data_dir}/freeze_watch.py
 install -m 0644 \
     "${script_dir}/packaging/com.raybird.FreezeWatch.desktop" \
     "${applications_dir}/com.raybird.FreezeWatch.desktop"
+install -m 0644 \
+    "${script_dir}/assets/icons/hicolor/scalable/apps/com.raybird.FreezeWatch.svg" \
+    "${icon_theme_dir}/scalable/apps/com.raybird.FreezeWatch.svg"
+install -m 0644 \
+    "${script_dir}/assets/icons/hicolor/symbolic/apps/com.raybird.FreezeWatch-symbolic.svg" \
+    "${script_dir}/assets/icons/hicolor/symbolic/apps/com.raybird.FreezeWatch-warning-symbolic.svg" \
+    "${icon_theme_dir}/symbolic/apps/"
 install -m 0644 "${script_dir}"/systemd/user/*.service "${unit_dir}/"
 install -m 0644 "${script_dir}"/systemd/user/*.timer "${unit_dir}/"
 
@@ -120,6 +129,10 @@ fi
 
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "${applications_dir}" >/dev/null 2>&1 || true
+fi
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t "${icon_theme_dir}" >/dev/null 2>&1 || true
 fi
 
 cat <<EOF

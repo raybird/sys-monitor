@@ -15,6 +15,7 @@ the period immediately before a forced reboot.
 - Docker CPU, memory, task counts, OOM state, restarts, and zombie detection
 - optional deep monitoring of one Docker Compose project
 - live `CPU 58°` StatusNotifier/AppIndicator label
+- dedicated full-colour launcher icon and symbolic tray icons
 - GTK4 dashboard with a 30-minute thermal ribbon
 - daily log rotation, compression after 14 days, expiration after 90 days
 - user-level systemd services; no root daemon

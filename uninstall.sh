@@ -7,6 +7,7 @@ readonly bin_dir="${user_home}/.local/bin"
 readonly data_home="${XDG_DATA_HOME:-${user_home}/.local/share}"
 readonly data_dir="${data_home}/freeze-watch"
 readonly applications_dir="${data_home}/applications"
+readonly icon_theme_dir="${data_home}/icons/hicolor"
 readonly config_home="${XDG_CONFIG_HOME:-${user_home}/.config}"
 readonly unit_dir="${config_home}/systemd/user"
 readonly app_config_dir="${config_home}/freeze-watch"
@@ -59,6 +60,9 @@ rm -f -- \
     "${bin_dir}/freeze-watch" \
     "${data_dir}/freeze_watch.py" \
     "${applications_dir}/com.raybird.FreezeWatch.desktop" \
+    "${icon_theme_dir}/scalable/apps/com.raybird.FreezeWatch.svg" \
+    "${icon_theme_dir}/symbolic/apps/com.raybird.FreezeWatch-symbolic.svg" \
+    "${icon_theme_dir}/symbolic/apps/com.raybird.FreezeWatch-warning-symbolic.svg" \
     "${unit_dir}/freeze-watch.service" \
     "${unit_dir}/freeze-monitor.service" \
     "${unit_dir}/freeze-monitor-maintain.service" \
@@ -67,6 +71,10 @@ rmdir --ignore-fail-on-non-empty "${data_dir}" 2>/dev/null || true
 
 if command -v update-desktop-database >/dev/null 2>&1; then
     update-desktop-database "${applications_dir}" >/dev/null 2>&1 || true
+fi
+
+if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+    gtk-update-icon-cache -f -t "${icon_theme_dir}" >/dev/null 2>&1 || true
 fi
 
 if ((purge_data == 1)); then

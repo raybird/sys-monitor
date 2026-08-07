@@ -22,10 +22,15 @@ from gi.repository import Gdk, Gio, GLib, Gtk
 
 
 APP_ID = "com.raybird.FreezeWatch"
+NORMAL_ICON_NAME = f"{APP_ID}-symbolic"
+WARNING_ICON_NAME = f"{APP_ID}-warning-symbolic"
 SNI_INTERFACE = "org.kde.StatusNotifierItem"
 DBUS_PROPERTIES = "org.freedesktop.DBus.Properties"
 SNI_PATH = "/StatusNotifierItem"
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "freeze-monitor"
+ICON_THEME_PATH = Path(
+    os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")
+) / "icons"
 
 METRICS_FIELDS = [
     "timestamp", "epoch", "uptime_s", "load1", "load5", "load15",
@@ -147,7 +152,7 @@ class StatusNotifierItem(dbus.service.Object):
         self.on_activate = on_activate
         self.label = "CPU —"
         self.title = "Freeze Watch"
-        self.icon_name = "utilities-system-monitor-symbolic"
+        self.icon_name = NORMAL_ICON_NAME
         self.status = "Active"
         self._register()
 
@@ -175,14 +180,14 @@ class StatusNotifierItem(dbus.service.Object):
             "Title": dbus.String(self.title),
             "Status": dbus.String(self.status),
             "WindowId": dbus.Int32(0),
-            "IconThemePath": dbus.String(""),
+            "IconThemePath": dbus.String(str(ICON_THEME_PATH)),
             "Menu": dbus.ObjectPath("/NO_DBUSMENU"),
             "ItemIsMenu": dbus.Boolean(False),
             "IconName": dbus.String(self.icon_name),
             "IconPixmap": dbus.Array([], signature="(iiay)"),
             "OverlayIconName": dbus.String(""),
             "OverlayIconPixmap": dbus.Array([], signature="(iiay)"),
-            "AttentionIconName": dbus.String("dialog-warning-symbolic"),
+            "AttentionIconName": dbus.String(WARNING_ICON_NAME),
             "AttentionIconPixmap": dbus.Array([], signature="(iiay)"),
             "AttentionMovieName": dbus.String(""),
             "XAyatanaLabel": dbus.String(self.label),
@@ -246,9 +251,9 @@ class StatusNotifierItem(dbus.service.Object):
             f"NVMe {format_temperature(temperatures.get('nvme'))}"
         )
         self.icon_name = (
-            "dialog-warning-symbolic"
+            WARNING_ICON_NAME
             if level in ("hot", "danger")
-            else "utilities-system-monitor-symbolic"
+            else NORMAL_ICON_NAME
         )
         self.PropertiesChanged(
             SNI_INTERFACE,
