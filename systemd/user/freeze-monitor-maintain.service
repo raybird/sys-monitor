@@ -1,0 +1,9 @@
+[Unit]
+Description=Compress and expire freeze monitor logs
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/freeze-monitor-maintain
+Nice=15
+CPUWeight=10
+IOWeight=10

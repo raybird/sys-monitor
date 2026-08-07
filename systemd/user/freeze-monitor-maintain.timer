@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily freeze monitor log retention
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=15m
+Unit=freeze-monitor-maintain.service
+
+[Install]
+WantedBy=timers.target

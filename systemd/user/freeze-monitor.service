@@ -1,0 +1,16 @@
+[Unit]
+Description=Persistent freeze diagnostic monitor
+Documentation=man:systemd.service(5)
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.config/freeze-watch/env
+ExecStart=%h/.local/bin/freeze-monitor
+Restart=always
+RestartSec=5s
+Nice=10
+CPUWeight=10
+IOWeight=10
+
+[Install]
+WantedBy=default.target

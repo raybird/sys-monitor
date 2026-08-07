@@ -1,0 +1,14 @@
+[Unit]
+Description=Freeze Watch system temperature indicator
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+EnvironmentFile=-%h/.config/freeze-watch/env
+ExecStart=%h/.local/bin/freeze-watch --background
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

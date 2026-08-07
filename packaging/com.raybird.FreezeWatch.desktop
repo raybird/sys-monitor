@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Freeze Watch
+Name[zh_TW]=Freeze Watch 系統監測
+Comment=Temperature and freeze diagnostics
+Comment[zh_TW]=溫度與系統凍結診斷
+Exec=freeze-watch
+Icon=utilities-system-monitor
+Terminal=false
+Categories=System;Monitor;
+Keywords=temperature;monitor;docker;freeze;hardware;
+StartupNotify=true

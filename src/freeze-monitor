@@ -1,0 +1,388 @@
+#!/usr/bin/env bash
+
+set -u
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+
+readonly interval_seconds=10
+readonly flush_every_samples=3
+readonly docker_every_samples=3
+readonly compose_project="${FREEZE_WATCH_COMPOSE_PROJECT:-}"
+readonly max_samples="${FREEZE_WATCH_MAX_SAMPLES:-0}"
+readonly state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/freeze-monitor"
+readonly event_log="${state_dir}/events.log"
+
+mkdir -p "${state_dir}"
+umask 077
+
+exec 9>"${state_dir}/monitor.lock"
+if ! flock -n 9; then
+    exit 0
+fi
+
+boot_id="$(< /proc/sys/kernel/random/boot_id)"
+start_stamp="$(date --iso-8601=seconds | tr ':' '-')"
+log_date="$(date +%F)"
+metrics_log="${state_dir}/metrics-${start_stamp}-${boot_id:0:8}.tsv"
+docker_log="${state_dir}/docker-${start_stamp}-${boot_id:0:8}.tsv"
+
+docker_state="not_sampled"
+docker_container_count="NA"
+docker_task_count="NA"
+tracked_container_count="NA"
+tracked_task_count="NA"
+tracked_process_count="NA"
+tracked_zombie_count="NA"
+last_docker_state=""
+last_docker_alert=""
+
+read_hwmon_temp() {
+    local wanted_name="$1"
+    local hwmon_dir
+    local actual_name
+    local value
+
+    for hwmon_dir in /sys/class/hwmon/hwmon*; do
+        [[ -r "${hwmon_dir}/name" ]] || continue
+        actual_name="$(< "${hwmon_dir}/name")"
+        [[ "${actual_name}" == "${wanted_name}" ]] || continue
+
+        if [[ -r "${hwmon_dir}/temp1_input" ]]; then
+            value="$(< "${hwmon_dir}/temp1_input")"
+            if [[ "${value}" =~ ^-?[0-9]+$ ]]; then
+                printf '%s' "${value}"
+                return
+            fi
+        fi
+    done
+
+    printf 'NA'
+}
+
+read_gpu_busy() {
+    local busy_file
+    local value
+
+    for busy_file in /sys/class/drm/card*/device/gpu_busy_percent; do
+        [[ -r "${busy_file}" ]] || continue
+        value="$(< "${busy_file}")"
+        if [[ "${value}" =~ ^[0-9]+$ ]]; then
+            printf '%s' "${value}"
+            return
+        fi
+    done
+
+    printf 'NA'
+}
+
+read_pressure_avg10() {
+    local pressure_file="$1"
+
+    awk '
+        /^some / {
+            for (i = 1; i <= NF; i++) {
+                if ($i ~ /^avg10=/) {
+                    sub(/^avg10=/, "", $i)
+                    print $i
+                    exit
+                }
+            }
+        }
+    ' "${pressure_file}" 2>/dev/null
+}
+
+record_docker_sample() {
+    local timestamp="$1"
+    local epoch="$2"
+    local stats_output
+    local project_output
+    local container_name
+    local cpu_pct
+    local mem_usage
+    local tasks
+    local is_tracked
+    local inspect_output
+    local oom_killed
+    local restart_count
+    local top_output
+    local process_count
+    local zombie_count
+    local alert=""
+    local name
+    declare -A tracked_names=()
+
+    docker_state="unavailable"
+    docker_container_count=0
+    docker_task_count=0
+    tracked_container_count=0
+    tracked_task_count=0
+    tracked_process_count=0
+    tracked_zombie_count=0
+
+    if ! command -v docker >/dev/null 2>&1; then
+        docker_state="not_installed"
+    elif ! stats_output="$(
+        timeout 5s docker stats --no-stream \
+            --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.PIDs}}' \
+            2>/dev/null
+    )"; then
+        docker_state="unavailable"
+    else
+        docker_state="ok"
+        project_output=""
+        if [[ -n "${compose_project}" ]]; then
+            project_output="$(
+                timeout 3s docker ps \
+                    --filter "label=com.docker.compose.project=${compose_project}" \
+                    --format '{{.Names}}' 2>/dev/null
+            )" || project_output=""
+        fi
+
+        while IFS= read -r name; do
+            [[ -n "${name}" ]] || continue
+            tracked_names["${name}"]=1
+        done <<< "${project_output}"
+
+        while IFS=$'\t' read -r container_name cpu_pct mem_usage tasks; do
+            [[ -n "${container_name}" ]] || continue
+            tasks="${tasks:-0}"
+            is_tracked=0
+            oom_killed="NA"
+            restart_count="NA"
+            process_count="NA"
+            zombie_count="NA"
+
+            docker_container_count=$((docker_container_count + 1))
+            if [[ "${tasks}" =~ ^[0-9]+$ ]]; then
+                docker_task_count=$((docker_task_count + tasks))
+            fi
+
+            if [[ -n "${tracked_names[${container_name}]+set}" ]]; then
+                is_tracked=1
+                tracked_container_count=$((tracked_container_count + 1))
+                if [[ "${tasks}" =~ ^[0-9]+$ ]]; then
+                    tracked_task_count=$((tracked_task_count + tasks))
+                fi
+
+                inspect_output="$(
+                    timeout 3s docker inspect \
+                        -f '{{.State.OOMKilled}}|{{.RestartCount}}' \
+                        "${container_name}" 2>/dev/null
+                )" || inspect_output="NA|NA"
+                IFS='|' read -r oom_killed restart_count <<< "${inspect_output}"
+
+                top_output="$(
+                    timeout 3s docker top "${container_name}" -eo pid,stat 2>/dev/null
+                )" || top_output=""
+                if [[ -n "${top_output}" ]]; then
+                    read -r process_count zombie_count < <(
+                        awk '
+                            NR > 1 && NF > 0 {
+                                processes++
+                                if ($2 ~ /^Z/) zombies++
+                            }
+                            END { print processes + 0, zombies + 0 }
+                        ' <<< "${top_output}"
+                    )
+                    tracked_process_count=$((tracked_process_count + process_count))
+                    tracked_zombie_count=$((tracked_zombie_count + zombie_count))
+                fi
+
+                if [[ "${zombie_count}" =~ ^[0-9]+$ ]] && (( zombie_count > 0 )); then
+                    alert+="${container_name}:zombies=${zombie_count};"
+                fi
+                if [[ "${oom_killed}" == "true" ]]; then
+                    alert+="${container_name}:oom=true;"
+                fi
+                if [[ "${restart_count}" =~ ^[0-9]+$ ]] && (( restart_count > 0 )); then
+                    alert+="${container_name}:restarts=${restart_count};"
+                fi
+            fi
+
+            mem_usage="${mem_usage//$'\t'/ }"
+            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+                "${timestamp}" "${epoch}" "${container_name}" \
+                "${is_tracked}" "${cpu_pct}" "${mem_usage}" "${tasks}" \
+                "${process_count}" "${zombie_count}" \
+                "${oom_killed}" "${restart_count}" >> "${docker_log}"
+        done <<< "${stats_output}"
+    fi
+
+    if [[ "${docker_state}" != "${last_docker_state}" ]]; then
+        printf '%s\tINFO\tDocker monitor state: %s\n' \
+            "${timestamp}" "${docker_state}" >> "${event_log}"
+        last_docker_state="${docker_state}"
+    fi
+
+    if [[ -n "${alert}" && "${alert}" != "${last_docker_alert}" ]]; then
+        printf '%s\tWARN\tDocker anomaly: %s\n' \
+            "${timestamp}" "${alert}" >> "${event_log}"
+    fi
+    last_docker_alert="${alert}"
+}
+
+record_event_if_needed() {
+    local timestamp="$1"
+    local cpu_temp="$2"
+    local gpu_temp="$3"
+    local mem_available_kib="$4"
+    local io_pressure="$5"
+
+    if [[ "${cpu_temp}" != "NA" ]] && (( cpu_temp >= 90000 )); then
+        printf '%s\tWARN\tCPU temperature %.1f C\n' \
+            "${timestamp}" "$((cpu_temp / 100))e-1" >> "${event_log}"
+    fi
+
+    if [[ "${gpu_temp}" != "NA" ]] && (( gpu_temp >= 90000 )); then
+        printf '%s\tWARN\tGPU temperature %.1f C\n' \
+            "${timestamp}" "$((gpu_temp / 100))e-1" >> "${event_log}"
+    fi
+
+    if (( mem_available_kib < 1048576 )); then
+        printf '%s\tWARN\tAvailable memory below 1 GiB: %s KiB\n' \
+            "${timestamp}" "${mem_available_kib}" >> "${event_log}"
+    fi
+
+    if awk -v value="${io_pressure}" 'BEGIN { exit !(value >= 20.0) }'; then
+        printf '%s\tWARN\tI/O pressure avg10 is %s\n' \
+            "${timestamp}" "${io_pressure}" >> "${event_log}"
+    fi
+}
+
+write_log_headers() {
+    printf 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\n' > "${metrics_log}"
+    printf 'timestamp\tepoch\tcontainer\tis_tracked_project\tcpu_pct\tmemory_usage\ttasks\tprocesses\tzombies\toom_killed\trestart_count\n' > "${docker_log}"
+}
+
+rotate_logs_if_needed() {
+    local today
+    local rotate_timestamp
+    local rotate_stamp
+    local old_metrics_log
+    local old_docker_log
+
+    today="$(date +%F)"
+    [[ "${today}" != "${log_date}" ]] || return
+
+    rotate_timestamp="$(date --iso-8601=seconds)"
+    rotate_stamp="${rotate_timestamp//:/-}"
+    old_metrics_log="${metrics_log}"
+    old_docker_log="${docker_log}"
+    sync -d "${old_metrics_log}" "${old_docker_log}" "${event_log}" 2>/dev/null || true
+
+    log_date="${today}"
+    metrics_log="${state_dir}/metrics-${rotate_stamp}-${boot_id:0:8}.tsv"
+    docker_log="${state_dir}/docker-${rotate_stamp}-${boot_id:0:8}.tsv"
+    write_log_headers
+
+    printf '%s\tROTATE\tmetrics=%s docker=%s\n' \
+        "${rotate_timestamp}" "${metrics_log}" "${docker_log}" >> "${event_log}"
+    sync -d "${metrics_log}" "${docker_log}" "${event_log}" 2>/dev/null || true
+}
+
+on_exit() {
+    local exit_timestamp
+
+    exit_timestamp="$(date --iso-8601=seconds)"
+    printf '%s\tSTOP\tmonitor stopped\n' "${exit_timestamp}" >> "${event_log}"
+    sync -d "${metrics_log}" "${docker_log}" "${event_log}" 2>/dev/null || true
+}
+
+on_signal() {
+    exit 0
+}
+
+trap on_exit EXIT
+trap on_signal INT TERM
+
+write_log_headers
+printf '%s\tSTART\tboot=%s metrics=%s interval=%ss flush=%ss\n' \
+    "$(date --iso-8601=seconds)" "${boot_id}" "${metrics_log}" \
+    "${interval_seconds}" "$((interval_seconds * flush_every_samples))" \
+    >> "${event_log}"
+sync -d "${metrics_log}" "${event_log}" 2>/dev/null || true
+
+sample_count=0
+
+while true; do
+    rotate_logs_if_needed
+    timestamp="$(date --iso-8601=seconds)"
+    epoch="$(date +%s)"
+    uptime_seconds="$(awk '{ print int($1) }' /proc/uptime)"
+    read -r load1 load5 load15 _ < /proc/loadavg
+
+    read -r mem_available_kib swap_total_kib swap_free_kib < <(
+        awk '
+            /^MemAvailable:/ { mem_available = $2 }
+            /^SwapTotal:/ { swap_total = $2 }
+            /^SwapFree:/ { swap_free = $2 }
+            END { print mem_available + 0, swap_total + 0, swap_free + 0 }
+        ' /proc/meminfo
+    )
+    swap_used_kib=$((swap_total_kib - swap_free_kib))
+
+    root_used_pct="$(
+        df -P / 2>/dev/null |
+            awk 'NR == 2 { gsub(/%/, "", $5); print $5 }'
+    )"
+    root_used_pct="${root_used_pct:-NA}"
+
+    cpu_temp="$(read_hwmon_temp k10temp)"
+    gpu_temp="$(read_hwmon_temp amdgpu)"
+    nvme_temp="$(read_hwmon_temp nvme)"
+    gpu_busy="$(read_gpu_busy)"
+
+    cpu_pressure="$(read_pressure_avg10 /proc/pressure/cpu)"
+    memory_pressure="$(read_pressure_avg10 /proc/pressure/memory)"
+    io_pressure="$(read_pressure_avg10 /proc/pressure/io)"
+    cpu_pressure="${cpu_pressure:-NA}"
+    memory_pressure="${memory_pressure:-NA}"
+    io_pressure="${io_pressure:-NA}"
+
+    top_processes="$(
+        ps -eo comm=,%cpu=,%mem= --sort=-%cpu 2>/dev/null |
+            head -5 |
+            awk '
+                {
+                    gsub(/[[:space:]]+/, " ", $0)
+                    sub(/^ /, "", $0)
+                    if (NR > 1) {
+                        printf ";"
+                    }
+                    printf "%s", $0
+                }
+            '
+    )"
+    top_processes="${top_processes//$'\t'/ }"
+
+    if (( sample_count % docker_every_samples == 0 )); then
+        record_docker_sample "${timestamp}" "${epoch}"
+    fi
+
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+        "${timestamp}" "${epoch}" "${uptime_seconds}" \
+        "${load1}" "${load5}" "${load15}" \
+        "${mem_available_kib}" "${swap_used_kib}" "${root_used_pct}" \
+        "${cpu_temp}" "${gpu_temp}" "${nvme_temp}" "${gpu_busy}" \
+        "${cpu_pressure}" "${memory_pressure}" "${io_pressure}" \
+        "${docker_state}" "${docker_container_count}" "${docker_task_count}" \
+        "${tracked_container_count}" "${tracked_task_count}" \
+        "${tracked_process_count}" "${tracked_zombie_count}" \
+        "${top_processes}" >> "${metrics_log}"
+
+    record_event_if_needed \
+        "${timestamp}" "${cpu_temp}" "${gpu_temp}" \
+        "${mem_available_kib}" "${io_pressure}"
+
+    sample_count=$((sample_count + 1))
+    if (( sample_count % flush_every_samples == 0 )); then
+        sync -d "${metrics_log}" "${docker_log}" "${event_log}" 2>/dev/null || true
+    fi
+    if [[ "${max_samples}" =~ ^[0-9]+$ ]] &&
+       (( max_samples > 0 && sample_count >= max_samples )); then
+        break
+    fi
+
+    sleep "${interval_seconds}"
+done

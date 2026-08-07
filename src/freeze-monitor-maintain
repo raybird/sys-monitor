@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+set -u
+
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+
+readonly state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/freeze-monitor"
+readonly event_log="${state_dir}/events.log"
+
+mkdir -p "${state_dir}"
+umask 077
+
+find "${state_dir}" -maxdepth 1 -type f \
+    \( -name 'metrics-*.tsv' -o -name 'docker-*.tsv' \) \
+    -mtime +13 -print0 |
+    xargs -0 -r gzip -6 --
+
+find "${state_dir}" -maxdepth 1 -type f \
+    \( -name 'metrics-*.tsv.gz' -o -name 'docker-*.tsv.gz' \) \
+    -mtime +89 -delete
+
+printf '%s\tMAINTENANCE\tcompressed raw logs older than 14 days; removed archives older than 90 days\n' \
+    "$(date --iso-8601=seconds)" >> "${event_log}"
