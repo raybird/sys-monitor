@@ -13,6 +13,16 @@ readonly max_samples="${FREEZE_WATCH_MAX_SAMPLES:-0}"
 readonly state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/freeze-monitor"
 readonly event_log="${state_dir}/events.log"
 
+# Preference order, most specific driver first. A generic fallback such as
+# acpitz is deliberately absent: it usually reports a board or ambient sensor,
+# and a plausible but wrong CPU temperature is worse than none when the file is
+# read back to explain a freeze.
+readonly cpu_temp_sensors=(k10temp coretemp zenpower k8temp cpu_thermal)
+readonly gpu_temp_sensors=(amdgpu radeon nouveau)
+
+# Overridable so the test suite can present a synthetic set of hwmon devices.
+readonly hwmon_root="${FREEZE_WATCH_HWMON_ROOT:-/sys/class/hwmon}"
+
 mkdir -p "${state_dir}"
 umask 077
 
@@ -37,24 +47,29 @@ tracked_zombie_count="NA"
 last_docker_state=""
 last_docker_alert=""
 
+# Accepts several driver names and returns the first one present, so the
+# argument order expresses preference rather than whatever order the kernel
+# happened to number the hwmon devices in.
 read_hwmon_temp() {
-    local wanted_name="$1"
+    local wanted_name
     local hwmon_dir
     local actual_name
     local value
 
-    for hwmon_dir in /sys/class/hwmon/hwmon*; do
-        [[ -r "${hwmon_dir}/name" ]] || continue
-        actual_name="$(< "${hwmon_dir}/name")"
-        [[ "${actual_name}" == "${wanted_name}" ]] || continue
+    for wanted_name in "$@"; do
+        for hwmon_dir in "${hwmon_root}"/hwmon*; do
+            [[ -r "${hwmon_dir}/name" ]] || continue
+            actual_name="$(< "${hwmon_dir}/name")"
+            [[ "${actual_name}" == "${wanted_name}" ]] || continue
 
-        if [[ -r "${hwmon_dir}/temp1_input" ]]; then
-            value="$(< "${hwmon_dir}/temp1_input")"
-            if [[ "${value}" =~ ^-?[0-9]+$ ]]; then
-                printf '%s' "${value}"
-                return
+            if [[ -r "${hwmon_dir}/temp1_input" ]]; then
+                value="$(< "${hwmon_dir}/temp1_input")"
+                if [[ "${value}" =~ ^-?[0-9]+$ ]]; then
+                    printf '%s' "${value}"
+                    return
+                fi
             fi
-        fi
+        done
     done
 
     printf 'NA'
@@ -328,8 +343,8 @@ while true; do
     )"
     root_used_pct="${root_used_pct:-NA}"
 
-    cpu_temp="$(read_hwmon_temp k10temp)"
-    gpu_temp="$(read_hwmon_temp amdgpu)"
+    cpu_temp="$(read_hwmon_temp "${cpu_temp_sensors[@]}")"
+    gpu_temp="$(read_hwmon_temp "${gpu_temp_sensors[@]}")"
     nvme_temp="$(read_hwmon_temp nvme)"
     gpu_busy="$(read_gpu_busy)"
 

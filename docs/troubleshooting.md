@@ -48,8 +48,36 @@ for device in /sys/class/hwmon/hwmon*; do
 done
 ```
 
-Freeze Watch currently recognises `k10temp`, `amdgpu`, and `nvme`. Unsupported
-hardware still receives load, memory, pressure, filesystem, and Docker data.
+The CPU temperature comes from the first of `k10temp`, `coretemp`, `zenpower`,
+`k8temp`, or `cpu_thermal` that is present, the GPU temperature from `amdgpu`,
+`radeon`, or `nouveau`, and the drive temperature from `nvme`. A generic
+`acpitz` device is deliberately ignored, because it usually reports a board or
+ambient sensor and a wrong CPU temperature is worse than none when the log is
+read back to explain a freeze.
+
+Integrated Intel graphics report neither a hwmon temperature nor
+`gpu_busy_percent`, so `gpu_temp_mC` and `gpu_busy_pct` stay `NA` on those
+machines. The CPU package sensor covers the same silicon. Unsupported hardware
+still receives load, memory, pressure, filesystem, and Docker data.
+
+## The tray icon never appears after logging in
+
+Some sessions never activate `graphical-session.target`, which is what would
+normally pull in the tray service. Chrome Remote Desktop and several
+lightweight session managers start the desktop outside the systemd user
+hierarchy. Check with:
+
+```bash
+systemctl --user is-active graphical-session.target
+```
+
+If that prints `inactive`, the XDG autostart entry installed at
+`~/.config/autostart/com.raybird.FreezeWatch-autostart.desktop` takes over at
+the next login. To start the tray in the current session without logging out:
+
+```bash
+systemctl --user start freeze-watch.service
+```
 
 ## Docker shows unavailable
 

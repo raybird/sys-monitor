@@ -21,6 +21,7 @@ readonly shell_sources=(
     "${repo_dir}/src/freeze-monitor"
     "${repo_dir}/src/freeze-monitor-maintain"
     "${repo_dir}/src/freeze-watch"
+    "${repo_dir}/src/freeze-watch-session"
 )
 
 bash -n "${shell_sources[@]}"
@@ -64,6 +65,7 @@ run_installer --no-start --compose-project example
 
 test -x "${test_home}/.local/bin/freeze-monitor"
 test -x "${test_home}/.local/bin/freeze-watch"
+test -x "${test_home}/.local/bin/freeze-watch-session"
 test -x "${test_home}/.local/share/freeze-watch/uninstall.sh"
 test -f "${test_home}/.config/systemd/user/freeze-watch.service"
 test -f "${test_home}/.local/share/applications/com.raybird.FreezeWatch.desktop"
@@ -73,6 +75,22 @@ test -f "${test_home}/.local/share/icons/hicolor/symbolic/apps/com.raybird.Freez
 grep -qxF "FREEZE_WATCH_COMPOSE_PROJECT=example" "${test_env}"
 grep -qxF "${installed_python_line}" "${test_env}"
 test "$(stat -c '%a' "${test_env}")" = "600"
+
+# A desktop entry cannot express a home-relative program, so the autostart
+# entry has to carry an absolute one.
+readonly test_autostart="${test_home}/.config/autostart/com.raybird.FreezeWatch-autostart.desktop"
+test -f "${test_autostart}"
+grep -qxF "Exec=${test_home}/.local/bin/freeze-watch-session" "${test_autostart}"
+if grep -q '@BIN_DIR@' "${test_autostart}"; then
+    printf 'autostart entry still carries the @BIN_DIR@ placeholder\n' >&2
+    exit 1
+fi
+
+if command -v desktop-file-validate >/dev/null 2>&1; then
+    desktop-file-validate \
+        "${test_autostart}" \
+        "${test_home}/.local/share/applications/com.raybird.FreezeWatch.desktop"
+fi
 
 # The units expand %h to the caller's home, so they can only be verified
 # against a home that has the programs installed.
@@ -122,6 +140,50 @@ FREEZE_WATCH_MAX_SAMPLES=1 \
 test -n "$(find "${test_home}/.local/state/freeze-monitor" \
     -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
 
+# Temperature sources are matched by preference, not by the order the kernel
+# numbered the devices in, and a machine with only an Intel package sensor has
+# to report a CPU temperature rather than NA.
+fake_hwmon() {
+    local root="$1"
+    shift
+    local index=0 entry name value
+
+    for entry in "$@"; do
+        name="${entry%%:*}"
+        value="${entry##*:}"
+        mkdir -p "${root}/hwmon${index}"
+        printf '%s\n' "${name}" > "${root}/hwmon${index}/name"
+        printf '%s\n' "${value}" > "${root}/hwmon${index}/temp1_input"
+        index=$((index + 1))
+    done
+}
+
+cpu_temp_for() {
+    local root="$1"
+    local state="$2"
+    shift 2
+
+    fake_hwmon "${root}" "$@"
+    HOME="${test_home}" \
+    XDG_STATE_HOME="${state}" \
+    FREEZE_WATCH_COMPOSE_PROJECT="" \
+    FREEZE_WATCH_MAX_SAMPLES=1 \
+    FREEZE_WATCH_HWMON_ROOT="${root}" \
+        "${test_home}/.local/bin/freeze-monitor"
+
+    awk -F'\t' 'NR == 2 { print $10 }' \
+        "$(find "${state}/freeze-monitor" -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
+}
+
+test "$(cpu_temp_for "${test_root}/hwmon-intel" "${test_root}/state-intel" \
+    acpitz:27800 nvme:43850 coretemp:49000)" = "49000"
+
+test "$(cpu_temp_for "${test_root}/hwmon-order" "${test_root}/state-order" \
+    coretemp:49000 k10temp:61000)" = "61000"
+
+test "$(cpu_temp_for "${test_root}/hwmon-none" "${test_root}/state-none" \
+    acpitz:27800)" = "NA"
+
 HOME="${test_home}" \
 XDG_DATA_HOME="${test_home}/.local/share" \
 XDG_CONFIG_HOME="${test_home}/.config" \
@@ -129,6 +191,8 @@ XDG_STATE_HOME="${test_home}/.local/state" \
     "${repo_dir}/uninstall.sh" --no-stop --purge-data
 
 test ! -e "${test_home}/.local/bin/freeze-watch"
+test ! -e "${test_home}/.local/bin/freeze-watch-session"
+test ! -e "${test_autostart}"
 test ! -e "${test_home}/.local/share/freeze-watch/uninstall.sh"
 test ! -e "${test_home}/.local/share/applications/com.raybird.FreezeWatch.desktop"
 test ! -e "${test_home}/.local/share/icons/hicolor/scalable/apps/com.raybird.FreezeWatch.svg"

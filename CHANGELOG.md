@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1 - 2026-08-08
+
+- Read the CPU temperature from `coretemp`, `zenpower`, `k8temp`, or
+  `cpu_thermal` when `k10temp` is absent, and the GPU temperature from `radeon`
+  or `nouveau` when `amdgpu` is absent. Intel and ARM machines previously
+  recorded `NA` for every sample, which left the tray label empty.
+- Match temperature sources in preference order rather than in hwmon numbering
+  order.
+- Start the tray from an XDG autostart entry in sessions that never activate
+  `graphical-session.target`, such as Chrome Remote Desktop and several
+  lightweight session managers.
+
 ## 0.2.0 - 2026-08-08
 
 - Install without cloning: the installer downloads its own source when run

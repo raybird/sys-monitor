@@ -21,6 +21,7 @@ readonly applications_dir="${data_home}/applications"
 readonly icon_theme_dir="${data_home}/icons/hicolor"
 readonly config_home="${XDG_CONFIG_HOME:-${user_home}/.config}"
 readonly unit_dir="${config_home}/systemd/user"
+readonly autostart_dir="${config_home}/autostart"
 readonly app_config_dir="${config_home}/freeze-watch"
 readonly env_file="${app_config_dir}/env"
 readonly state_dir="${XDG_STATE_HOME:-${user_home}/.local/state}/freeze-monitor"
@@ -335,10 +336,12 @@ fi
 
 install -d -m 0755 \
     "${bin_dir}" "${data_dir}" "${applications_dir}" "${unit_dir}" "${app_config_dir}" \
+    "${autostart_dir}" \
     "${icon_theme_dir}/scalable/apps" "${icon_theme_dir}/symbolic/apps"
 install -m 0755 "${source_dir}/src/freeze-monitor" "${bin_dir}/freeze-monitor"
 install -m 0755 "${source_dir}/src/freeze-monitor-maintain" "${bin_dir}/freeze-monitor-maintain"
 install -m 0755 "${source_dir}/src/freeze-watch" "${bin_dir}/freeze-watch"
+install -m 0755 "${source_dir}/src/freeze-watch-session" "${bin_dir}/freeze-watch-session"
 install -m 0755 "${source_dir}/uninstall.sh" "${data_dir}/uninstall.sh"
 install -m 0644 "${source_dir}/src/freeze_watch.py" "${data_dir}/freeze_watch.py"
 install -m 0644 \
@@ -353,6 +356,15 @@ install -m 0644 \
     "${icon_theme_dir}/symbolic/apps/"
 install -m 0644 "${source_dir}"/systemd/user/*.service "${unit_dir}/"
 install -m 0644 "${source_dir}"/systemd/user/*.timer "${unit_dir}/"
+
+# Desktop entries cannot express a home-relative program, and an autostart
+# entry that misses because ~/.local/bin is absent from the session PATH fails
+# silently. The placeholder is therefore expanded with plain string
+# substitution, which has no pattern characters to escape.
+autostart_entry="$(< "${source_dir}/packaging/com.raybird.FreezeWatch-autostart.desktop")"
+printf '%s\n' "${autostart_entry//@BIN_DIR@/${bin_dir}}" \
+    > "${autostart_dir}/com.raybird.FreezeWatch-autostart.desktop"
+chmod 0644 "${autostart_dir}/com.raybird.FreezeWatch-autostart.desktop"
 
 # The configuration file is rewritten on every run so that an upgrade always
 # records the interpreter it verified, while settings the caller did not

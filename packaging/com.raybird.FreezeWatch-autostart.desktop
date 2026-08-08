@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Freeze Watch tray
+Name[zh_TW]=Freeze Watch 系統列
+Comment=Start the temperature tray item in sessions without systemd graphical-session support
+Comment[zh_TW]=在未觸發 graphical-session.target 的桌面環境啟動溫度系統列圖示
+Exec=@BIN_DIR@/freeze-watch-session
+Icon=com.raybird.FreezeWatch
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true

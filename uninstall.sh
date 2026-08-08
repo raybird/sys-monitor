@@ -19,6 +19,7 @@ readonly applications_dir="${data_home}/applications"
 readonly icon_theme_dir="${data_home}/icons/hicolor"
 readonly config_home="${XDG_CONFIG_HOME:-${user_home}/.config}"
 readonly unit_dir="${config_home}/systemd/user"
+readonly autostart_dir="${config_home}/autostart"
 readonly app_config_dir="${config_home}/freeze-watch"
 readonly state_dir="${XDG_STATE_HOME:-${user_home}/.local/state}/freeze-monitor"
 
@@ -67,9 +68,11 @@ rm -f -- \
     "${bin_dir}/freeze-monitor" \
     "${bin_dir}/freeze-monitor-maintain" \
     "${bin_dir}/freeze-watch" \
+    "${bin_dir}/freeze-watch-session" \
     "${data_dir}/freeze_watch.py" \
     "${data_dir}/uninstall.sh" \
     "${applications_dir}/com.raybird.FreezeWatch.desktop" \
+    "${autostart_dir}/com.raybird.FreezeWatch-autostart.desktop" \
     "${icon_theme_dir}/scalable/apps/com.raybird.FreezeWatch.svg" \
     "${icon_theme_dir}/symbolic/apps/com.raybird.FreezeWatch-symbolic.svg" \
     "${icon_theme_dir}/symbolic/apps/com.raybird.FreezeWatch-warning-symbolic.svg" \

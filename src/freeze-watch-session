@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#
+# Starts the tray service from an XDG autostart entry.
+#
+# Desktop environments that reach graphical-session.target pull in
+# freeze-watch.service by themselves. Sessions that never reach it start this
+# instead: Chrome Remote Desktop and several lightweight session managers run
+# the session outside the systemd user hierarchy, so nothing would otherwise
+# trigger the unit. Starting an already running service is a no-op, so a
+# desktop that uses both paths is not a problem.
+
+set -u
+
+for variable in DISPLAY WAYLAND_DISPLAY XAUTHORITY; do
+    if [[ -n "${!variable:-}" ]]; then
+        systemctl --user import-environment "${variable}" 2>/dev/null || true
+    fi
+done
+
+exec systemctl --user start freeze-watch.service

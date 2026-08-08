@@ -9,7 +9,7 @@ the period immediately before a forced reboot.
 
 ## Features
 
-- CPU, GPU, and NVMe temperatures
+- CPU, GPU, and NVMe temperatures on AMD, Intel, and ARM hardware
 - load averages, memory, swap, filesystem usage, and Linux PSI pressure
 - GPU busy percentage and top CPU processes
 - Docker CPU, memory, task counts, OOM state, restarts, and zombie detection
@@ -98,7 +98,9 @@ the choice with `--python /path/to/python3`.
 ## Use
 
 The collector and retention timer start immediately. The dashboard starts in
-the active graphical session and returns automatically on the next login.
+the active graphical session and returns automatically on the next login,
+including in sessions that never activate `graphical-session.target`, where an
+XDG autostart entry starts it instead.
 
 ```bash
 freeze-watch
