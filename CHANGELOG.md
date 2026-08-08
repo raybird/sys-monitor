@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3 - 2026-08-08
+
+- Restart running units when reinstalling. `enable --now` does nothing to a
+  unit that is already active, so an upgrade kept executing the previous
+  program until the next reboot.
+- Restart the tray when it is already running even if
+  `graphical-session.target` is inactive, which is the state Chrome Remote
+  Desktop and similar sessions leave it in.
+
 ## 0.2.2 - 2026-08-08
 
 - Apply the widened temperature-sensor list to the dashboard as well. It kept

@@ -131,6 +131,65 @@ launcher_output="$(
 test "${launcher_output}" = \
     "stub ${test_home}/.local/share/freeze-watch/freeze_watch.py"
 
+# An upgrade has to restart whatever is already running, otherwise the previous
+# program keeps executing until the next reboot. A stub stands in for systemctl
+# so the behaviour can be asserted without touching the real user instance.
+stub_systemctl="${test_home}/stub-systemctl"
+cat > "${stub_systemctl}" <<'STUB'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "${FREEZE_WATCH_SYSTEMCTL_LOG}"
+if [[ "$*" == *"is-active --quiet "* ]]; then
+    # Pattern removal on $* applies per positional parameter, so the joined
+    # string has to be materialised before the last word can be taken.
+    arguments="$*"
+    unit="${arguments##* }"
+    case " ${FREEZE_WATCH_STUB_ACTIVE:-} " in
+        *" ${unit} "*) exit 0 ;;
+        *) exit 3 ;;
+    esac
+fi
+exit 0
+STUB
+chmod 0755 "${stub_systemctl}"
+
+install_with_stub() {
+    local log="$1"
+    local active="$2"
+
+    : > "${log}"
+    HOME="${test_home}" \
+    XDG_DATA_HOME="${test_home}/.local/share" \
+    XDG_CONFIG_HOME="${test_home}/.config" \
+    XDG_STATE_HOME="${test_home}/.local/state" \
+    FREEZE_WATCH_SYSTEMCTL="${stub_systemctl}" \
+    FREEZE_WATCH_SYSTEMCTL_LOG="${log}" \
+    FREEZE_WATCH_STUB_ACTIVE="${active}" \
+        "${repo_dir}/install.sh" > /dev/null
+}
+
+readonly upgrade_log="${test_root}/systemctl-upgrade.log"
+install_with_stub "${upgrade_log}" \
+    "freeze-monitor.service freeze-monitor-maintain.timer freeze-watch.service"
+grep -qxF -- '--user restart freeze-monitor.service' "${upgrade_log}"
+grep -qxF -- '--user restart freeze-monitor-maintain.timer' "${upgrade_log}"
+grep -qxF -- '--user restart freeze-watch.service' "${upgrade_log}"
+
+# A session that never activates graphical-session.target still has to see the
+# tray restarted when it is already running, which is the case that regressed.
+readonly headless_log="${test_root}/systemctl-headless.log"
+install_with_stub "${headless_log}" "freeze-watch.service"
+grep -qxF -- '--user start freeze-monitor.service' "${headless_log}"
+grep -qxF -- '--user restart freeze-watch.service' "${headless_log}"
+
+readonly fresh_log="${test_root}/systemctl-fresh.log"
+install_with_stub "${fresh_log}" ""
+grep -qxF -- '--user start freeze-monitor.service' "${fresh_log}"
+grep -qxF -- '--user enable freeze-watch.service' "${fresh_log}"
+if grep -qE -- '--user (start|restart) freeze-watch.service' "${fresh_log}"; then
+    printf 'the tray was started without a graphical session\n' >&2
+    exit 1
+fi
+
 HOME="${test_home}" \
 XDG_STATE_HOME="${test_home}/.local/state" \
 FREEZE_WATCH_COMPOSE_PROJECT="" \

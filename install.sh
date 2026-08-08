@@ -29,6 +29,10 @@ readonly state_dir="${XDG_STATE_HOME:-${user_home}/.local/state}/freeze-monitor"
 readonly default_repo="raybird/sys-monitor"
 readonly default_ref="main"
 
+# Overridable so the test suite can observe how units are enabled and refreshed
+# without touching the developer's own systemd user instance.
+readonly systemctl_bin="${FREEZE_WATCH_SYSTEMCTL:-systemctl}"
+
 # Every interpreter-dependent part of Freeze Watch imports exactly this set.
 readonly python_probe='
 import dbus
@@ -328,7 +332,7 @@ for command_name in bash awk df flock gzip install ps sync systemctl timeout; do
 done
 
 if ((no_start == 0)); then
-    systemctl --user show-environment >/dev/null 2>&1 ||
+    "${systemctl_bin}" --user show-environment >/dev/null 2>&1 ||
         fail "systemd user session is unavailable; retry with --no-start"
 fi
 
@@ -392,13 +396,32 @@ chmod 0600 "${env_file}.new"
 mv -f "${env_file}.new" "${env_file}"
 
 if ((no_start == 0)); then
-    systemctl --user daemon-reload
-    systemctl --user enable --now freeze-monitor.service
-    systemctl --user enable --now freeze-monitor-maintain.timer
-    systemctl --user enable freeze-watch.service
+    "${systemctl_bin}" --user daemon-reload
 
-    if systemctl --user is-active --quiet graphical-session.target; then
-        systemctl --user restart freeze-watch.service
+    # "enable --now" does nothing to a unit that is already running, so an
+    # upgrade used to keep executing the previous program until the next
+    # reboot. Anything already up is restarted onto the files just installed.
+    enable_and_refresh() {
+        local unit="$1"
+
+        "${systemctl_bin}" --user enable "${unit}"
+
+        if "${systemctl_bin}" --user is-active --quiet "${unit}"; then
+            "${systemctl_bin}" --user restart "${unit}"
+        else
+            "${systemctl_bin}" --user start "${unit}"
+        fi
+    }
+
+    enable_and_refresh freeze-monitor.service
+    enable_and_refresh freeze-monitor-maintain.timer
+
+    "${systemctl_bin}" --user enable freeze-watch.service
+
+    if "${systemctl_bin}" --user is-active --quiet freeze-watch.service; then
+        "${systemctl_bin}" --user restart freeze-watch.service
+    elif "${systemctl_bin}" --user is-active --quiet graphical-session.target; then
+        "${systemctl_bin}" --user start freeze-watch.service
     else
         printf 'Freeze Watch GUI will start with the next graphical session.\n'
     fi
