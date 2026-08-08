@@ -28,6 +28,12 @@ SNI_INTERFACE = "org.kde.StatusNotifierItem"
 DBUS_PROPERTIES = "org.freedesktop.DBus.Properties"
 SNI_PATH = "/StatusNotifierItem"
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "freeze-monitor"
+HWMON_ROOT = Path(os.environ.get("FREEZE_WATCH_HWMON_ROOT", "/sys/class/hwmon"))
+
+# Kept in step with the same lists in the freeze-monitor collector.
+CPU_TEMP_SENSORS = ("k10temp", "coretemp", "zenpower", "k8temp", "cpu_thermal")
+GPU_TEMP_SENSORS = ("amdgpu", "radeon", "nouveau")
+NVME_TEMP_SENSORS = ("nvme",)
 ICON_THEME_PATH = Path(
     os.environ.get("XDG_DATA_HOME", Path.home() / ".local/share")
 ) / "icons"
@@ -102,23 +108,25 @@ def format_gib(kib: int | None) -> str:
     return "—" if kib is None else f"{kib / 1024 / 1024:.1f} GiB"
 
 
-def read_hwmon_temperature(wanted_name: str) -> float | None:
-    for hwmon in Path("/sys/class/hwmon").glob("hwmon*"):
-        try:
-            if (hwmon / "name").read_text().strip() != wanted_name:
+def read_hwmon_temperature(*wanted_names: str) -> float | None:
+    """Return the first named driver that is present, in preference order."""
+    for wanted_name in wanted_names:
+        for hwmon in sorted(HWMON_ROOT.glob("hwmon*")):
+            try:
+                if (hwmon / "name").read_text().strip() != wanted_name:
+                    continue
+                raw_value = (hwmon / "temp1_input").read_text().strip()
+                return int(raw_value) / 1000
+            except (OSError, ValueError):
                 continue
-            raw_value = (hwmon / "temp1_input").read_text().strip()
-            return int(raw_value) / 1000
-        except (OSError, ValueError):
-            continue
     return None
 
 
 def direct_temperatures() -> dict[str, float | None]:
     return {
-        "cpu": read_hwmon_temperature("k10temp"),
-        "gpu": read_hwmon_temperature("amdgpu"),
-        "nvme": read_hwmon_temperature("nvme"),
+        "cpu": read_hwmon_temperature(*CPU_TEMP_SENSORS),
+        "gpu": read_hwmon_temperature(*GPU_TEMP_SENSORS),
+        "nvme": read_hwmon_temperature(*NVME_TEMP_SENSORS),
     }
 
 
@@ -602,13 +610,16 @@ class FreezeWatch(Gtk.Application):
     def refresh(self) -> bool:
         metric_rows = read_tsv_tail("metrics-*.tsv", METRICS_FIELDS)
         latest_metric = metric_rows[-1] if metric_rows else {}
+        # Each reading falls back on its own. Testing them together meant one
+        # readable sensor suppressed the recorded values for every other field.
         temperatures = direct_temperatures()
-        if all(value is None for value in temperatures.values()):
-            temperatures = {
-                "cpu": self._temperature_from_metric(latest_metric, "cpu_temp_mC"),
-                "gpu": self._temperature_from_metric(latest_metric, "gpu_temp_mC"),
-                "nvme": self._temperature_from_metric(latest_metric, "nvme_temp_mC"),
-            }
+        for name, column in (
+            ("cpu", "cpu_temp_mC"),
+            ("gpu", "gpu_temp_mC"),
+            ("nvme", "nvme_temp_mC"),
+        ):
+            if temperatures[name] is None:
+                temperatures[name] = self._temperature_from_metric(latest_metric, column)
         level = temperature_level(temperatures)
         status, status_detail = level_copy(level)
 

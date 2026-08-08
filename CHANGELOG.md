@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.2 - 2026-08-08
+
+- Apply the widened temperature-sensor list to the dashboard as well. It kept
+  its own copy that still named only `k10temp` and `amdgpu`, so 0.2.1 fixed the
+  recorded data while the tray label stayed `CPU —` on Intel and ARM machines.
+- Fall back to the collector's recorded temperature per reading instead of only
+  when every direct sensor read fails. One readable sensor, typically `nvme`,
+  used to suppress the recorded values for every other field.
+- Test that the two sensor lists stay identical, so the pair cannot drift apart
+  again.
+
 ## 0.2.1 - 2026-08-08
 
 - Read the CPU temperature from `coretemp`, `zenpower`, `k8temp`, or
