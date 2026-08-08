@@ -1,4 +1,13 @@
 #!/usr/bin/env bash
+#
+# Freeze Watch uninstaller.
+#
+# From a checkout, an installed copy, or without either:
+#   ./uninstall.sh [options]
+#   ~/.local/share/freeze-watch/uninstall.sh [options]
+#   curl -fsSL https://raw.githubusercontent.com/raybird/sys-monitor/main/uninstall.sh | bash
+#
+# The script only removes paths below $HOME and needs no source tree.
 
 set -euo pipefail
 
@@ -59,6 +68,7 @@ rm -f -- \
     "${bin_dir}/freeze-monitor-maintain" \
     "${bin_dir}/freeze-watch" \
     "${data_dir}/freeze_watch.py" \
+    "${data_dir}/uninstall.sh" \
     "${applications_dir}/com.raybird.FreezeWatch.desktop" \
     "${icon_theme_dir}/scalable/apps/com.raybird.FreezeWatch.svg" \
     "${icon_theme_dir}/symbolic/apps/com.raybird.FreezeWatch-symbolic.svg" \

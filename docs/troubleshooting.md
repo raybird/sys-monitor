@@ -1,5 +1,29 @@
 # Troubleshooting
 
+## The installer reports missing GTK dependencies
+
+The bindings are distribution packages, so an interpreter from pyenv, asdf,
+conda, or an activated virtualenv usually cannot see them even when the
+packages are installed. Compare the two:
+
+```bash
+python3 -c 'import dbus, gi'
+/usr/bin/python3 -c 'import dbus, gi'
+```
+
+If only the second succeeds, the installer will normally pick it on its own.
+Ask it which interpreter it resolved, or name one explicitly:
+
+```bash
+./install.sh --print-python
+./install.sh --python /usr/bin/python3
+```
+
+The answer is recorded as `FREEZE_WATCH_PYTHON` in
+`~/.config/freeze-watch/env`, and both the systemd units and the `freeze-watch`
+launcher read it from there. Editing that line is enough to move an existing
+installation to a different interpreter.
+
 ## The tray icon is missing
 
 Confirm the service is running:
