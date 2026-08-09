@@ -5,9 +5,23 @@ set -u
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 export LC_ALL=C
 
-readonly interval_seconds=10
+readonly interval_seconds="${FREEZE_WATCH_INTERVAL_SECONDS:-10}"
 readonly flush_every_samples=3
 readonly docker_every_samples=3
+
+# A sample that arrives this late means the machine stopped scheduling this
+# loop, which is the closest a userspace process gets to observing a freeze
+# from the inside.
+readonly stall_threshold_seconds="${FREEZE_WATCH_STALL_SECONDS:-$((interval_seconds * 3))}"
+
+# Trouble switches the log to write-through. The samples immediately before a
+# freeze are the ones this tool exists to keep, and they are exactly the ones a
+# page cache loses when the power is cut. These thresholds sit below the ones
+# that raise a warning, so the evidence is already safe by the time anything is
+# worth warning about.
+readonly elevated_temp_mC=80000
+readonly elevated_mem_available_kib=$((2 * 1024 * 1024))
+readonly elevated_pressure=5.0
 readonly compose_project="${FREEZE_WATCH_COMPOSE_PROJECT:-}"
 readonly max_samples="${FREEZE_WATCH_MAX_SAMPLES:-0}"
 readonly state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/freeze-monitor"
@@ -20,8 +34,10 @@ readonly event_log="${state_dir}/events.log"
 readonly cpu_temp_sensors=(k10temp coretemp zenpower k8temp cpu_thermal)
 readonly gpu_temp_sensors=(amdgpu radeon nouveau)
 
-# Overridable so the test suite can present a synthetic set of hwmon devices.
+# Overridable so the test suite can present synthetic hardware, including a
+# kernel built without pressure accounting.
 readonly hwmon_root="${FREEZE_WATCH_HWMON_ROOT:-/sys/class/hwmon}"
+readonly pressure_root="${FREEZE_WATCH_PRESSURE_ROOT:-/proc/pressure}"
 
 mkdir -p "${state_dir}"
 umask 077
@@ -259,9 +275,87 @@ record_event_if_needed() {
             "${timestamp}" "${mem_available_kib}" >> "${event_log}"
     fi
 
-    if awk -v value="${io_pressure}" 'BEGIN { exit !(value >= 20.0) }'; then
+    # The + 0 forces a numeric comparison. Without it a kernel built without
+    # pressure accounting reports NA, awk compares strings, "NA" sorts above
+    # "20.0", and every single sample raises a warning.
+    if awk -v value="${io_pressure}" 'BEGIN { exit !(value + 0 >= 20.0) }'; then
         printf '%s\tWARN\tI/O pressure avg10 is %s\n' \
             "${timestamp}" "${io_pressure}" >> "${event_log}"
+    fi
+}
+
+sample_is_elevated() {
+    local cpu_temp="$1"
+    local gpu_temp="$2"
+    local mem_available_kib="$3"
+    local memory_pressure="$4"
+    local io_pressure="$5"
+
+    if [[ "${cpu_temp}" != "NA" ]] && (( cpu_temp >= elevated_temp_mC )); then
+        return 0
+    fi
+
+    if [[ "${gpu_temp}" != "NA" ]] && (( gpu_temp >= elevated_temp_mC )); then
+        return 0
+    fi
+
+    if (( mem_available_kib < elevated_mem_available_kib )); then
+        return 0
+    fi
+
+    awk -v memory="${memory_pressure}" -v io="${io_pressure}" \
+        -v threshold="${elevated_pressure}" \
+        'BEGIN { exit !(memory + 0 >= threshold || io + 0 >= threshold) }'
+}
+
+# A new session's first job is to decide how the previous one ended, because
+# nothing else in the logs says where a freeze happened. A session that never
+# wrote STOP was cut off. A different boot id then means the machine went down
+# without shutting down, which is what a forced reboot looks like; the same
+# boot id means only the collector died while the machine kept running.
+report_previous_session() {
+    local timestamp="$1"
+    local now_epoch="$2"
+    local last_record previous_type previous_boot previous_metrics
+    local last_sample="" last_epoch="" silence=""
+
+    [[ -r "${event_log}" ]] || return 0
+
+    last_record="$(
+        awk -F'\t' '$2 == "START" || $2 == "STOP" { line = $0 } END { print line }' \
+            "${event_log}"
+    )"
+    [[ -n "${last_record}" ]] || return 0
+
+    previous_type="$(printf '%s' "${last_record}" | cut -f2)"
+    [[ "${previous_type}" == "START" ]] || return 0
+
+    previous_boot="$(printf '%s' "${last_record}" | sed -n 's/.*boot=\([^ ]*\).*/\1/p')"
+    previous_metrics="$(printf '%s' "${last_record}" | sed -n 's/.*metrics=\([^ ]*\).*/\1/p')"
+
+    if [[ -n "${previous_metrics}" && -r "${previous_metrics}" ]]; then
+        read -r last_sample last_epoch < <(
+            awk -F'\t' '
+                NR > 1 && NF > 2 { stamp = $1; stamp_epoch = $2 }
+                END { print stamp, stamp_epoch }
+            ' "${previous_metrics}"
+        )
+    fi
+
+    last_sample="${last_sample:-unknown}"
+    # A clock that stepped backwards, over NTP or across an RTC the firmware
+    # rewrote, would otherwise report a negative silence.
+    if [[ "${last_epoch}" =~ ^[0-9]+$ ]] && (( now_epoch >= last_epoch )); then
+        silence=" silent_for=$((now_epoch - last_epoch))s"
+    fi
+
+    if [[ "${previous_boot}" != "${boot_id}" ]]; then
+        printf '%s\tFREEZE\tprevious session ended without shutting down; last_sample=%s%s metrics=%s\n' \
+            "${timestamp}" "${last_sample}" "${silence}" \
+            "${previous_metrics:-unknown}" >> "${event_log}"
+    else
+        printf '%s\tINTERRUPTED\tcollector stopped without notice while the machine stayed up; last_sample=%s%s\n' \
+            "${timestamp}" "${last_sample}" "${silence}" >> "${event_log}"
     fi
 }
 
@@ -312,18 +406,36 @@ trap on_exit EXIT
 trap on_signal INT TERM
 
 write_log_headers
+start_timestamp="$(date --iso-8601=seconds)"
+report_previous_session "${start_timestamp}" "$(date +%s)"
 printf '%s\tSTART\tboot=%s metrics=%s interval=%ss flush=%ss\n' \
-    "$(date --iso-8601=seconds)" "${boot_id}" "${metrics_log}" \
+    "${start_timestamp}" "${boot_id}" "${metrics_log}" \
     "${interval_seconds}" "$((interval_seconds * flush_every_samples))" \
     >> "${event_log}"
 sync -d "${metrics_log}" "${event_log}" 2>/dev/null || true
 
 sample_count=0
+previous_epoch=""
+write_through=0
 
 while true; do
     rotate_logs_if_needed
     timestamp="$(date --iso-8601=seconds)"
     epoch="$(date +%s)"
+
+    # A late sample is evidence in its own right. If these keep arriving on
+    # time through a reported freeze then the kernel stayed alive and the
+    # desktop is what stopped responding, which is a different investigation.
+    stalled=0
+    if [[ -n "${previous_epoch}" ]] &&
+       (( epoch - previous_epoch >= stall_threshold_seconds )); then
+        stalled=1
+        printf '%s\tGAP\tsampling stalled for %ss, expected %ss\n' \
+            "${timestamp}" "$((epoch - previous_epoch))" "${interval_seconds}" \
+            >> "${event_log}"
+    fi
+    previous_epoch="${epoch}"
+
     uptime_seconds="$(awk '{ print int($1) }' /proc/uptime)"
     read -r load1 load5 load15 _ < /proc/loadavg
 
@@ -348,9 +460,9 @@ while true; do
     nvme_temp="$(read_hwmon_temp nvme)"
     gpu_busy="$(read_gpu_busy)"
 
-    cpu_pressure="$(read_pressure_avg10 /proc/pressure/cpu)"
-    memory_pressure="$(read_pressure_avg10 /proc/pressure/memory)"
-    io_pressure="$(read_pressure_avg10 /proc/pressure/io)"
+    cpu_pressure="$(read_pressure_avg10 "${pressure_root}/cpu")"
+    memory_pressure="$(read_pressure_avg10 "${pressure_root}/memory")"
+    io_pressure="$(read_pressure_avg10 "${pressure_root}/io")"
     cpu_pressure="${cpu_pressure:-NA}"
     memory_pressure="${memory_pressure:-NA}"
     io_pressure="${io_pressure:-NA}"
@@ -390,8 +502,22 @@ while true; do
         "${timestamp}" "${cpu_temp}" "${gpu_temp}" \
         "${mem_available_kib}" "${io_pressure}"
 
+    if ((stalled == 1)) || sample_is_elevated \
+        "${cpu_temp}" "${gpu_temp}" "${mem_available_kib}" \
+        "${memory_pressure}" "${io_pressure}"; then
+        if ((write_through == 0)); then
+            write_through=1
+            printf '%s\tFLUSH\tconditions elevated, writing every sample through\n' \
+                "${timestamp}" >> "${event_log}"
+        fi
+    elif ((write_through == 1)); then
+        write_through=0
+        printf '%s\tFLUSH\tconditions normal, resuming buffered writes\n' \
+            "${timestamp}" >> "${event_log}"
+    fi
+
     sample_count=$((sample_count + 1))
-    if (( sample_count % flush_every_samples == 0 )); then
+    if ((write_through == 1)) || (( sample_count % flush_every_samples == 0 )); then
         sync -d "${metrics_log}" "${docker_log}" "${event_log}" 2>/dev/null || true
     fi
     if [[ "${max_samples}" =~ ^[0-9]+$ ]] &&

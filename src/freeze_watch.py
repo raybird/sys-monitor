@@ -29,6 +29,9 @@ DBUS_PROPERTIES = "org.freedesktop.DBus.Properties"
 SNI_PATH = "/StatusNotifierItem"
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "freeze-monitor"
 HWMON_ROOT = Path(os.environ.get("FREEZE_WATCH_HWMON_ROOT", "/sys/class/hwmon"))
+# FREEZE and GAP are the reason the collector exists, so they outrank the
+# routine housekeeping entries when the dashboard picks what to show.
+NOTEWORTHY_EVENTS = ("FREEZE", "INTERRUPTED", "GAP", "WARN", "ROTATE")
 WINDOW_MIN_WIDTH = 720
 WINDOW_MIN_HEIGHT = 540
 WINDOW_PREFERRED_WIDTH = 1040
@@ -643,7 +646,11 @@ class FreezeWatch(Gtk.Application):
     def _recent_events(self) -> list[str]:
         event_log = STATE_DIR / "events.log"
         lines = [line for line in tail_text(event_log, 24_000).splitlines() if line.strip()]
-        meaningful = [line for line in lines if "\tWARN\t" in line or "\tROTATE\t" in line]
+        meaningful = [
+            line
+            for line in lines
+            if any(f"\t{kind}\t" in line for kind in NOTEWORTHY_EVENTS)
+        ]
         return (meaningful or lines)[-6:][::-1]
 
     def present_dashboard(self) -> bool:

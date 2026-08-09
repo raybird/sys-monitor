@@ -30,6 +30,26 @@ Docker itself, so opening the dashboard does not add container-engine load.
 All files live below `${XDG_STATE_HOME:-~/.local/state}/freeze-monitor`.
 No daemon runs as root.
 
+## Incidents
+
+The collector is read after the fact, so it has to say where an incident was.
+
+Each session writes `START` on entry and `STOP` on a clean exit. A session that
+never wrote `STOP` was cut off, and the next session says so: `FREEZE` when the
+boot id changed, meaning the machine went down without shutting down, and
+`INTERRUPTED` when it did not, meaning only the collector died. Both name the
+last sample that reached disk.
+
+`GAP` records a sample that arrived later than three intervals. It answers a
+question the metrics cannot: if samples kept arriving through a reported
+freeze, the kernel was scheduling this loop and the desktop is what stopped
+responding.
+
+Samples are buffered and flushed every third one, except while any reading is
+elevated, when each sample is written through. The thresholds for that sit
+below the ones that raise a warning, so the evidence is already durable before
+anything is worth warning about. `FLUSH` marks each transition.
+
 ## Compatibility
 
 The first private deployment used `runtelenexus_*` field names. The public

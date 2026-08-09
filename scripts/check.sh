@@ -252,6 +252,106 @@ test "$(cpu_temp_for "${test_root}/hwmon-order" "${test_root}/state-order" \
 test "$(cpu_temp_for "${test_root}/hwmon-none" "${test_root}/state-none" \
     acpitz:27800)" = "NA"
 
+# A kernel without pressure accounting reports NA, which awk compares as a
+# string unless forced numeric. "NA" sorts above "20.0", so every sample used
+# to raise an I/O pressure warning, on every machine that lacks the feature.
+mkdir -p "${test_root}/pressure-absent"
+HOME="${test_home}" \
+XDG_STATE_HOME="${test_root}/state-no-psi" \
+FREEZE_WATCH_COMPOSE_PROJECT="" \
+FREEZE_WATCH_MAX_SAMPLES=1 \
+FREEZE_WATCH_PRESSURE_ROOT="${test_root}/pressure-absent" \
+    "${test_home}/.local/bin/freeze-monitor"
+
+no_psi_metrics="$(find "${test_root}/state-no-psi/freeze-monitor" \
+    -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
+readonly no_psi_metrics
+test "$(awk -F'\t' 'NR == 2 { print $16 }' "${no_psi_metrics}")" = "NA"
+if grep -q 'I/O pressure' "${test_root}/state-no-psi/freeze-monitor/events.log"; then
+    printf 'an absent pressure file raised a spurious warning\n' >&2
+    exit 1
+fi
+
+# The collector is a post-mortem tool, so a session that never wrote STOP has
+# to be reported by the next one. A different boot id means the machine went
+# down without shutting down; the same boot id means only the collector died.
+current_boot="$(< /proc/sys/kernel/random/boot_id)"
+readonly current_boot
+
+seed_previous_session() {
+    local state="$1"
+    local previous_boot="$2"
+    local closing_event="$3"
+    local monitor_dir="${state}/freeze-monitor"
+    local previous_metrics="${monitor_dir}/metrics-previous.tsv"
+
+    mkdir -p "${monitor_dir}"
+    printf 'timestamp\tepoch\tuptime_s\n' > "${previous_metrics}"
+    printf '2026-08-09T10:00:00+08:00\t1786312800\t1000\n' >> "${previous_metrics}"
+    printf '2026-08-09T10:00:10+08:00\t1786312810\t1010\n' >> "${previous_metrics}"
+
+    printf '2026-08-09T09:59:00+08:00\tSTART\tboot=%s metrics=%s interval=10s flush=30s\n' \
+        "${previous_boot}" "${previous_metrics}" > "${monitor_dir}/events.log"
+    if [[ -n "${closing_event}" ]]; then
+        printf '2026-08-09T10:00:20+08:00\t%s\tmonitor stopped\n' "${closing_event}" \
+            >> "${monitor_dir}/events.log"
+    fi
+}
+
+run_collector() {
+    local state="$1"
+    shift
+
+    HOME="${test_home}" \
+    XDG_STATE_HOME="${state}" \
+    FREEZE_WATCH_COMPOSE_PROJECT="" \
+    FREEZE_WATCH_MAX_SAMPLES=1 \
+    "$@" \
+        "${test_home}/.local/bin/freeze-monitor"
+}
+
+seed_previous_session "${test_root}/state-freeze" "00000000-0000-0000-0000-000000000000" ""
+run_collector "${test_root}/state-freeze" env
+grep -q $'\tFREEZE\t' "${test_root}/state-freeze/freeze-monitor/events.log"
+grep -q 'last_sample=2026-08-09T10:00:10+08:00' \
+    "${test_root}/state-freeze/freeze-monitor/events.log"
+
+seed_previous_session "${test_root}/state-interrupted" "${current_boot}" ""
+run_collector "${test_root}/state-interrupted" env
+grep -q $'\tINTERRUPTED\t' \
+    "${test_root}/state-interrupted/freeze-monitor/events.log"
+
+seed_previous_session "${test_root}/state-clean" "00000000-0000-0000-0000-000000000000" "STOP"
+run_collector "${test_root}/state-clean" env
+if grep -qE $'\t(FREEZE|INTERRUPTED)\t' \
+    "${test_root}/state-clean/freeze-monitor/events.log"; then
+    printf 'a clean shutdown was reported as a freeze\n' >&2
+    exit 1
+fi
+
+# Two samples one second apart, with the stall threshold lowered to match, are
+# enough to exercise the gap detector without waiting for a real stall.
+HOME="${test_home}" \
+XDG_STATE_HOME="${test_root}/state-gap" \
+FREEZE_WATCH_COMPOSE_PROJECT="" \
+FREEZE_WATCH_MAX_SAMPLES=2 \
+FREEZE_WATCH_INTERVAL_SECONDS=1 \
+FREEZE_WATCH_STALL_SECONDS=1 \
+    "${test_home}/.local/bin/freeze-monitor"
+grep -q $'\tGAP\t' "${test_root}/state-gap/freeze-monitor/events.log"
+
+# Elevated conditions switch the log to write-through, which is announced once
+# on the transition rather than on every sample.
+fake_hwmon "${test_root}/hwmon-hot" coretemp:92000
+HOME="${test_home}" \
+XDG_STATE_HOME="${test_root}/state-hot" \
+FREEZE_WATCH_COMPOSE_PROJECT="" \
+FREEZE_WATCH_MAX_SAMPLES=2 \
+FREEZE_WATCH_INTERVAL_SECONDS=1 \
+FREEZE_WATCH_HWMON_ROOT="${test_root}/hwmon-hot" \
+    "${test_home}/.local/bin/freeze-monitor"
+test "$(grep -c $'\tFLUSH\t' "${test_root}/state-hot/freeze-monitor/events.log")" = "1"
+
 HOME="${test_home}" \
 XDG_DATA_HOME="${test_home}/.local/share" \
 XDG_CONFIG_HOME="${test_home}/.config" \

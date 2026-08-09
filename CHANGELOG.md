@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0 - 2026-08-09
+
+- Report how the previous session ended. A session that never wrote `STOP` was
+  cut off: a new boot id records a `FREEZE` naming the last sample and how long
+  the log had been silent, the same boot id records an `INTERRUPTED` because
+  only the collector died while the machine kept running. Until now nothing in
+  the logs said where an incident happened.
+- Record a `GAP` when a sample arrives later than three intervals. Whether
+  sampling continued through a reported freeze separates a stalled kernel from
+  a desktop that stopped responding, which are different investigations.
+- Write every sample straight to disk while conditions are elevated, well
+  before anything is warning-worthy. Buffered writes could lose the last 30
+  seconds before a power cut, which is the evidence the collector exists to
+  keep. The switch is logged once per transition.
+- Surface the new events in the dashboard ahead of routine entries.
+- Stop reporting an I/O pressure warning on every sample on kernels built
+  without pressure accounting. The reading is `NA` there, and awk compared it
+  as a string, where `"NA"` sorts above `"20.0"`.
+
 ## 0.2.4 - 2026-08-09
 
 - Stop the dashboard from opening wider than the screen. Event and container
