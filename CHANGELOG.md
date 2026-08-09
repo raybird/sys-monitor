@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.1 - 2026-08-09
+
+- Match the kernel messages AMD and NVIDIA actually emit. Vendor spellings
+  differ: AMD announces `GPU reset begin!` with no drm tag, Intel wraps errors
+  in `[drm:function]` rather than a bare `[drm]`, and the NVIDIA blob reports
+  an `Xid`. Only the Intel `GPU HANG` shape was recognised, which left the
+  hardware this tool was written on the least well covered.
+- Also match soft lockups, kernel panics, page-fault oopses, and general
+  protection faults, which are among the most common causes of a machine that
+  stops responding.
+- Check the pattern against recorded message shapes in
+  `tests/kernel-samples.tsv`, including boot chatter it must ignore, and check
+  the AMD sensor path against a synthetic k10temp and amdgpu machine.
+
 ## 0.4.0 - 2026-08-09
 
 - Record `KERNEL` events for the messages that explain a machine which stopped

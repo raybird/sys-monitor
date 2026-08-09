@@ -252,6 +252,43 @@ test "$(cpu_temp_for "${test_root}/hwmon-order" "${test_root}/state-order" \
 test "$(cpu_temp_for "${test_root}/hwmon-none" "${test_root}/state-none" \
     acpitz:27800)" = "NA"
 
+# The tool was written on AMD hardware, so the widened lists have to keep
+# reading it exactly as before. Both readings are checked, and the AMD sensors
+# are deliberately given higher device numbers than the ones that would
+# otherwise win, since preference order is what decides this rather than the
+# order the kernel enumerated them in.
+amd_root="${test_root}/hwmon-amd"
+amd_state="${test_root}/state-amd"
+fake_hwmon "${amd_root}" nvme:41850 acpitz:27800 amdgpu:58000 k10temp:62500
+HOME="${test_home}" \
+XDG_STATE_HOME="${amd_state}" \
+FREEZE_WATCH_COMPOSE_PROJECT="" \
+FREEZE_WATCH_MAX_SAMPLES=1 \
+FREEZE_WATCH_HWMON_ROOT="${amd_root}" \
+    "${test_home}/.local/bin/freeze-monitor"
+
+amd_metrics="$(find "${amd_state}/freeze-monitor" \
+    -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
+test "$(awk -F'\t' 'NR == 2 { print $10 }' "${amd_metrics}")" = "62500"
+test "$(awk -F'\t' 'NR == 2 { print $11 }' "${amd_metrics}")" = "58000"
+test "$(awk -F'\t' 'NR == 2 { print $12 }' "${amd_metrics}")" = "41850"
+
+# The dashboard keeps its own copy of the sensor lists, so it is checked
+# against the same synthetic machine.
+FREEZE_WATCH_HWMON_ROOT="${amd_root}" "${python_bin}" - <<PY
+import importlib.util
+
+spec = importlib.util.spec_from_file_location(
+    "freeze_watch_amd", "${repo_dir}/src/freeze_watch.py"
+)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+expected = {"cpu": 62.5, "gpu": 58.0, "nvme": 41.85}
+actual = module.direct_temperatures()
+assert actual == expected, f"AMD readings drifted: {actual} != {expected}"
+PY
+
 # A kernel without pressure accounting reports NA, which awk compares as a
 # string unless forced numeric. "NA" sorts above "20.0", so every sample used
 # to raise an I/O pressure warning, on every machine that lacks the feature.
@@ -353,12 +390,43 @@ exit "${FREEZE_WATCH_STUB_PROBE_STATUS:-0}"
 STUB
 chmod 0755 "${stub_journalctl}"
 
+# Vendor spellings differ enough that the pattern is checked against recorded
+# message shapes rather than against whatever this machine happens to log. The
+# ignore set guards the other direction: a pattern broad enough to catch every
+# hang also catches every boot.
+kernel_pattern="$(
+    sed -n "s/^readonly kernel_alert_pattern='\(.*\)'$/\1/p" \
+        "${repo_dir}/src/freeze-monitor"
+)"
+test -n "${kernel_pattern}"
+
+kernel_corpus_failures=0
+while IFS=$'\t' read -r verdict message; do
+    [[ -n "${verdict}" && "${verdict}" != \#* ]] || continue
+    if printf '%s\n' "${message}" | grep -qaE "${kernel_pattern}"; then
+        observed="match"
+    else
+        observed="ignore"
+    fi
+    if [[ "${observed}" != "${verdict}" ]]; then
+        printf 'kernel pattern: expected %s, got %s, for: %s\n' \
+            "${verdict}" "${observed}" "${message}" >&2
+        kernel_corpus_failures=1
+    fi
+done < "${repo_dir}/tests/kernel-samples.tsv"
+((kernel_corpus_failures == 0)) || exit 1
+
+# A short log for the reporting test, kept below the per-scan cap so that what
+# is and is not reported depends on the pattern rather than on truncation.
 cat > "${test_root}/kernel-alerts.txt" <<'LOG'
 usb 1-3: new high-speed USB device number 5 using xhci_hcd
 i915 0000:00:02.0: [drm] GPU HANG: ecode 12:1:85dffffb, in gnome-shell [3210]
 Adding 2097148k swap on /swapfile
 INFO: task kworker/2:1:184 blocked for more than 122 seconds.
 LOG
+
+awk -F'\t' '$1 == "match" { print $2 }' \
+    "${repo_dir}/tests/kernel-samples.tsv" > "${test_root}/kernel-flood.txt"
 
 run_kernel_scan() {
     local state="$1"
@@ -383,6 +451,13 @@ if grep -qE 'new high-speed USB device|Adding .* swap' "${kernel_events}"; then
     printf 'routine kernel messages were reported as incidents\n' >&2
     exit 1
 fi
+
+# One failing device can emit thousands of near-identical lines, and a log that
+# scrolls past the freeze is no better than no log, so each scan is capped.
+run_kernel_scan "${test_root}/state-kernel-flood" \
+    FREEZE_WATCH_STUB_KERNEL="${test_root}/kernel-flood.txt"
+test "$(grep -c $'\tKERNEL\t' \
+    "${test_root}/state-kernel-flood/freeze-monitor/events.log")" = "3"
 
 # The previous boot is only read when the machine went down without shutting
 # down, otherwise every restart would replay the same lines.

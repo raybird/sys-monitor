@@ -31,7 +31,11 @@ readonly kernel_alerts_per_scan=3
 # The log is read to answer "why did it stop", not to audit the boot, so
 # anything else is noise. journalctl is preferred over /dev/kmsg because it
 # respects group permissions and can reach the boot before this one.
-readonly kernel_alert_pattern='hung_task|blocked for more than [0-9]+ seconds|detected stalls? on CPU|INFO: rcu|GPU HANG|\[drm\].*(reset|hang|timeout)|ring [a-z0-9_.]+ timeout|nvme.*(timeout|controller is down|resetting)|[Mm]achine [Cc]heck|mce: \[Hardware Error\]|Out of memory: Kill|oom-kill:|above threshold, cpu clock throttled|EXT4-fs error|Buffer I/O error|ata[0-9]+\.[0-9]+: failed command'
+# tests/kernel-samples.tsv holds the message shapes this is checked against,
+# including the ones it must not match. Vendor spellings differ: AMD announces
+# "GPU reset begin!" with no drm tag, Intel wraps errors in "[drm:function]"
+# rather than a bare "[drm]", and the NVIDIA blob reports an Xid instead.
+readonly kernel_alert_pattern='hung_task|blocked for more than [0-9]+ seconds|detected stalls? on CPU|INFO: rcu|soft lockup|hard LOCKUP|Kernel panic|BUG: unable to handle|general protection fault|GPU HANG|GPU hang|GPU reset|\[drm[^]]*\].*(reset|hang|timeout|ERROR)|ring [a-z0-9_.]+ timeout|NVRM: Xid|nvme.*(timeout|controller is down|resetting)|mce: \[Hardware Error\]|[Mm]achine check events logged|Out of memory: Kill|oom-kill:|above threshold, cpu clock throttled|EXT4-fs error|Buffer I/O error|ata[0-9]+\.[0-9]+: failed command'
 readonly compose_project="${FREEZE_WATCH_COMPOSE_PROJECT:-}"
 readonly max_samples="${FREEZE_WATCH_MAX_SAMPLES:-0}"
 readonly state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/freeze-monitor"

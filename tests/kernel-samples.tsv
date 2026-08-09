@@ -1,0 +1,41 @@
+# Real kernel message shapes, one per line, as "verdict<TAB>message".
+#
+# match  the collector must report this as a KERNEL event
+# ignore the collector must leave this alone
+#
+# The ignore set matters as much as the match set: a pattern broad enough to
+# catch every hang also catches every boot, and a log that buries the freeze is
+# no better than no log.
+match	amdgpu 0000:03:00.0: amdgpu: ring gfx_0.0.0 timeout, signaled seq=12345, emitted seq=12347
+match	amdgpu 0000:03:00.0: amdgpu: GPU reset begin!
+match	amdgpu 0000:03:00.0: amdgpu: GPU reset(3) failed
+match	[drm:amdgpu_job_timedout [amdgpu]] *ERROR* ring gfx timeout, but soft recovered
+match	[drm] GPU reset(1) succeeded!
+match	i915 0000:00:02.0: [drm] GPU HANG: ecode 12:1:85dffffb, in gnome-shell [3210]
+match	[drm:intel_engine_reset [i915]] *ERROR* rcs0 reset failed
+match	NVRM: Xid (PCI:0000:01:00): 79, GPU has fallen off the bus.
+match	INFO: task kworker/2:1:184 blocked for more than 122 seconds.
+match	rcu: INFO: rcu_preempt detected stalls on CPUs/tasks:
+match	watchdog: BUG: soft lockup - CPU#3 stuck for 23s! [Xorg:1842]
+match	Kernel panic - not syncing: Fatal exception in interrupt
+match	BUG: unable to handle page fault for address: 0000000000000018
+match	general protection fault, probably for non-canonical address 0xdead
+match	mce: [Hardware Error]: Machine check events logged
+match	nvme nvme0: I/O 384 QID 3 timeout, aborting
+match	nvme nvme0: controller is down; will reset: CSTS=0xffffffff
+match	ata1.00: failed command: READ FPDMA QUEUED
+match	EXT4-fs error (device nvme0n1p2): ext4_find_entry:1663: inode #1234
+match	Buffer I/O error on dev nvme0n1p2, logical block 0, async page read
+match	Out of memory: Killed process 4821 (chrome) total-vm:12345kB
+match	oom-kill:constraint=CONSTRAINT_NONE,nodemask=(null)
+match	CPU2: Package temperature above threshold, cpu clock throttled (total events = 41)
+ignore	usb 1-3: new high-speed USB device number 5 using xhci_hcd
+ignore	Adding 2097148k swap on /swapfile.  Priority:-2 extents:6 across:2097148k SS
+ignore	EXT4-fs (nvme0n1p2): mounted filesystem with ordered data mode
+ignore	docker0: port 4(veth596d2ab) entered forwarding state
+ignore	amdgpu 0000:03:00.0: amdgpu: Using BACO for runtime pm
+ignore	i915 0000:00:02.0: [drm] Using Transparent Hugepages
+ignore	systemd[1]: Starting Journal Service...
+ignore	Linux version 6.8.0-137-generic (buildd@lcy02-amd64-098)
+ignore	nvme nvme0: 8/0/0 default/read/poll queues
+ignore	ata1: SATA link up 6.0 Gbps (SStatus 133 SControl 300)
