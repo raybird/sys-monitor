@@ -11,6 +11,13 @@ Freeze Watch has three deliberately small processes:
 The GUI reads the collector's append-only TSV files. It does not repeatedly call
 Docker itself, so opening the dashboard does not add container-engine load.
 
+It reads them twice over. Live, it shows the newest file. In review, it shows
+the window before a chosen incident: a freeze names the file it was cut off
+from, a stall is matched to the file whose samples span it, and the container
+sample beside either is one substitution away, since both files are named from
+the same stamp. The tray is left on live readings throughout, because a review
+is something the reader asked for and the indicator is not.
+
 ## Data flow
 
 ```text

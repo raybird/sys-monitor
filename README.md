@@ -18,7 +18,8 @@ the period immediately before a forced reboot.
 - optional deep monitoring of one Docker Compose project
 - live `CPU 58°` StatusNotifier/AppIndicator label
 - dedicated full-colour launcher icon and symbolic tray icons
-- GTK4 dashboard with a 30-minute thermal ribbon
+- GTK4 dashboard with a 30-minute thermal ribbon and stall markers
+- incident review showing the half hour before any recorded freeze or stall
 - daily log rotation, compression after 14 days, expiration after 90 days
 - user-level systemd services; no root daemon
 
@@ -113,6 +114,12 @@ systemctl --user status freeze-watch.service
 Click the tray item to open the dashboard. Closing the window hides it while
 the tray process remains active. The dashboard is also available as
 **Freeze Watch** in the desktop application launcher.
+
+When the collector has recorded a freeze or a stall, a selector appears at the
+top of the dashboard. Choosing an entry replaces the live readings with the
+half hour that led up to it, so the temperatures, pressure, load, and running
+containers shown are the ones recorded at the time. The tray keeps reporting
+the machine as it is now. Select **即時監測** to return.
 
 Configuration is stored in:
 

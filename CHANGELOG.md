@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.0 - 2026-08-09
+
+- Review a past incident from the dashboard. A selector lists recorded freezes
+  and stalls, and choosing one shows the thirty minutes leading up to it:
+  temperatures, pressure, load, and the containers as they were recorded, not
+  as they are now. The ribbon is titled with the moment it ends at.
+- Put the incident summary above the live readings. The dashboard is opened
+  after something went wrong far more often than to watch a healthy machine,
+  and that panel used to be below the fold.
+- Mark stalls on the thermal ribbon, derived from the sample intervals
+  themselves, so a hesitation is visible in both live and review views.
+- Wrap event messages instead of truncating them. The end of a freeze entry
+  carries the last sample and the file it was cut off from, which was exactly
+  the part being cut off.
+- Keep twelve events rather than six.
+- Leave the tray on live readings during a review, because the indicator was
+  not what the reader asked to change.
+
 ## 0.4.1 - 2026-08-09
 
 - Match the kernel messages AMD and NVIDIA actually emit. Vendor spellings

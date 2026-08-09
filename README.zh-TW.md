@@ -13,7 +13,8 @@ Freeze Watch 是一套輕量 Linux 凍結診斷工具，包含背景採樣器、
 - Docker CPU、記憶體、tasks、OOM、重啟與 zombie
 - 可指定一個 Docker Compose project 做深度程序觀測
 - 系統列即時顯示 `CPU 58°`
-- GTK4 儀表板與最近 30 分鐘熱度帶
+- GTK4 儀表板、最近 30 分鐘熱度帶與採樣停擺標記
+- 事故回顧：選一次凍結或停擺，看它發生前的半小時
 - 每日換檔、14 天後壓縮、90 天後刪除
 - 全部以使用者身分執行，不需要 root daemon
 
