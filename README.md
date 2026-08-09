@@ -12,7 +12,8 @@ the period immediately before a forced reboot.
 - freeze, stall, and unclean-shutdown markers naming the last sample recorded
 - kernel evidence for GPU hangs, hung tasks, RCU stalls, and device timeouts
 - CPU, GPU, and NVMe temperatures on AMD, Intel, and ARM hardware
-- load averages, memory, swap, filesystem usage, and Linux PSI pressure
+- load averages, memory, swap, filesystem usage, and Linux PSI pressure,
+  including the `full` figures and processes in uninterruptible sleep
 - GPU busy percentage and top CPU processes
 - Docker CPU, memory, task counts, OOM state, restarts, and zombie detection
 - optional deep monitoring of one Docker Compose project

@@ -59,6 +59,10 @@ METRICS_FIELDS = [
     "memory_psi_avg10", "io_psi_avg10", "docker_state",
     "docker_containers", "docker_tasks", "tracked_containers",
     "tracked_tasks", "tracked_processes", "tracked_zombies", "top_processes",
+    # Appended, never inserted: these files are read by position, and one
+    # written before this release simply stops short of them.
+    "cpu_psi_full_avg10", "memory_psi_full_avg10", "io_psi_full_avg10",
+    "dstate_count",
 ]
 DOCKER_FIELDS = [
     "timestamp", "epoch", "container", "is_tracked_project", "cpu_pct",
@@ -95,7 +99,11 @@ def read_tsv_path(path: Path | None, fields: list[str]) -> list[dict[str, str]]:
     if not lines:
         return []
 
-    rows = list(csv.DictReader(lines, fieldnames=fields, delimiter="\t"))
+    # restval keeps a row written before a column existed reading as missing
+    # data rather than as None, which every caller here would render literally.
+    rows = list(
+        csv.DictReader(lines, fieldnames=fields, delimiter="\t", restval="NA")
+    )
     return [row for row in rows if row.get("timestamp") and row["timestamp"] != "timestamp"]
 
 
@@ -962,14 +970,20 @@ class FreezeWatch(Gtk.Application):
         self.labels["system_1"].set_text(
             latest_metric.get("load1", "—")
         )
+        # Uninterruptible sleepers sit beside the load average because they are
+        # what makes it climb while nothing is using the CPU.
         self.labels["system_detail_1"].set_text(
-            f"5m {latest_metric.get('load5', '—')} · 15m {latest_metric.get('load15', '—')}"
+            f"5m {latest_metric.get('load5', '—')} · "
+            f"15m {latest_metric.get('load15', '—')} · "
+            f"D {latest_metric.get('dstate_count', '—')}"
         )
         self.labels["system_2"].set_text(
             f"{latest_metric.get('io_psi_avg10', '—')}%"
         )
         self.labels["system_detail_2"].set_text(
-            f"CPU {latest_metric.get('cpu_psi_avg10', '—')}% · RAM {latest_metric.get('memory_psi_avg10', '—')}%"
+            f"全停 {latest_metric.get('io_psi_full_avg10', '—')}% · "
+            f"CPU {latest_metric.get('cpu_psi_avg10', '—')}% · "
+            f"RAM {latest_metric.get('memory_psi_avg10', '—')}%"
         )
         self.labels["system_3"].set_text(
             f"{latest_metric.get('root_used_pct', '—')}%"

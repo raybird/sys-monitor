@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.6.0 - 2026-08-09
+
+- Record the `full` pressure figures alongside `some`. "Some" means at least
+  one task was stalled; "full" means every task was, which is what a freeze
+  is, and only the weaker of the two was being kept.
+- Count processes in uninterruptible sleep. A pile-up is the signature of a
+  machine stopped on storage rather than on the CPU, and it explains a load
+  average that climbs while nothing uses any CPU. The dashboard shows the
+  count beside the load average for that reason.
+- Warn on sustained full pressure or a pile-up of uninterruptible sleepers,
+  and treat either as grounds for writing every sample through.
+- Read files written before these columns existed as missing data rather than
+  as the literal text `None`. Columns are appended, never inserted.
+
 ## 0.5.0 - 2026-08-09
 
 - Review a past incident from the dashboard. A selector lists recorded freezes

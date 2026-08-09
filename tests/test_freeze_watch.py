@@ -61,6 +61,29 @@ class FreezeWatchDataTests(unittest.TestCase):
         self.assertEqual(freeze_watch.format_temperature(None), "—")
         self.assertEqual(freeze_watch.format_gib(None), "—")
 
+    def test_reads_a_file_written_before_the_newest_columns(self) -> None:
+        """Columns are appended, so an older file just stops short of them."""
+        older_fields = freeze_watch.METRICS_FIELDS[
+            : freeze_watch.METRICS_FIELDS.index("top_processes") + 1
+        ]
+        row = {field: "NA" for field in older_fields}
+        row.update({"timestamp": "2026-01-01T00:00:00+00:00", "cpu_temp_mC": "51000"})
+        path = freeze_watch.STATE_DIR / "metrics-older.tsv"
+        path.write_text(
+            "\t".join(older_fields)
+            + "\n"
+            + "\t".join(row[field] for field in older_fields)
+            + "\n",
+            encoding="utf-8",
+        )
+
+        rows = freeze_watch.read_tsv_tail("metrics-*.tsv", freeze_watch.METRICS_FIELDS)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["cpu_temp_mC"], "51000")
+        # Absent rather than None, so the dashboard renders it as missing data.
+        self.assertEqual(rows[0]["dstate_count"], "NA")
+        self.assertEqual(rows[0]["io_psi_full_avg10"], "NA")
+
 
 class IncidentTests(unittest.TestCase):
     """Finding an incident and the samples that led to it."""

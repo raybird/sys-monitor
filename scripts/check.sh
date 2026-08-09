@@ -304,6 +304,57 @@ no_psi_metrics="$(find "${test_root}/state-no-psi/freeze-monitor" \
     -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
 readonly no_psi_metrics
 test "$(awk -F'\t' 'NR == 2 { print $16 }' "${no_psi_metrics}")" = "NA"
+test "$(awk -F'\t' 'NR == 2 { print $27 }' "${no_psi_metrics}")" = "NA"
+
+# "some" pressure means at least one task stalled, "full" means every task did,
+# which is the stronger of the two signals and used to be discarded.
+live_metrics="$(find "${test_home}/.local/state/freeze-monitor" \
+    -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
+readonly live_metrics
+head -1 "${live_metrics}" | grep -qF 'io_psi_full_avg10'
+head -1 "${live_metrics}" | grep -qF 'dstate_count'
+test "$(head -1 "${live_metrics}" | awk -F'\t' '{ print NF }')" = "28"
+test "$(awk -F'\t' 'NR == 2 { print NF }' "${live_metrics}")" = "28"
+
+# Synthetic pressure files give "some" and "full" different values, so reading
+# the wrong line cannot pass by looking numeric.
+synthetic_pressure="${test_root}/pressure-synth"
+mkdir -p "${synthetic_pressure}"
+for kind in cpu memory io; do
+    printf 'some avg10=7.77 avg60=0.00 avg300=0.00 total=1\n' \
+        > "${synthetic_pressure}/${kind}"
+    printf 'full avg10=3.33 avg60=0.00 avg300=0.00 total=1\n' \
+        >> "${synthetic_pressure}/${kind}"
+done
+
+# A stub ps presents processes in uninterruptible sleep, which cannot be
+# conjured on a healthy machine but is the signature worth counting.
+stub_ps="${test_home}/stub-ps"
+cat > "${stub_ps}" <<'STUB'
+#!/usr/bin/env bash
+if [[ "$*" == *"stat="* ]]; then
+    printf 'S\nD\nSl\nD+\nDL\nR\n'
+else
+    printf 'stuck 0.0 0.1\n'
+fi
+STUB
+chmod 0755 "${stub_ps}"
+
+HOME="${test_home}" \
+XDG_STATE_HOME="${test_root}/state-signals" \
+FREEZE_WATCH_COMPOSE_PROJECT="" \
+FREEZE_WATCH_MAX_SAMPLES=1 \
+FREEZE_WATCH_PRESSURE_ROOT="${synthetic_pressure}" \
+FREEZE_WATCH_PS="${stub_ps}" \
+    "${test_home}/.local/bin/freeze-monitor"
+
+signals_metrics="$(find "${test_root}/state-signals/freeze-monitor" \
+    -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
+readonly signals_metrics
+test "$(awk -F'\t' 'NR == 2 { print $16 }' "${signals_metrics}")" = "7.77"
+test "$(awk -F'\t' 'NR == 2 { print $27 }' "${signals_metrics}")" = "3.33"
+# S, D, Sl, D+, DL, R: the three beginning with D are the ones that count.
+test "$(awk -F'\t' 'NR == 2 { print $28 }' "${signals_metrics}")" = "3"
 if grep -q 'I/O pressure' "${test_root}/state-no-psi/freeze-monitor/events.log"; then
     printf 'an absent pressure file raised a spurious warning\n' >&2
     exit 1

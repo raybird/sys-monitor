@@ -22,6 +22,10 @@ readonly stall_threshold_seconds="${FREEZE_WATCH_STALL_SECONDS:-$((interval_seco
 readonly elevated_temp_mC=80000
 readonly elevated_mem_available_kib=$((2 * 1024 * 1024))
 readonly elevated_pressure=5.0
+readonly elevated_pressure_full=1.0
+readonly elevated_dstate_count=4
+readonly warn_pressure_full=10.0
+readonly warn_dstate_count=8
 
 readonly journalctl_bin="${FREEZE_WATCH_JOURNALCTL:-journalctl}"
 readonly kernel_every_samples=30
@@ -52,6 +56,7 @@ readonly gpu_temp_sensors=(amdgpu radeon nouveau)
 # kernel built without pressure accounting.
 readonly hwmon_root="${FREEZE_WATCH_HWMON_ROOT:-/sys/class/hwmon}"
 readonly pressure_root="${FREEZE_WATCH_PRESSURE_ROOT:-/proc/pressure}"
+readonly ps_bin="${FREEZE_WATCH_PS:-ps}"
 
 mkdir -p "${state_dir}"
 umask 077
@@ -126,11 +131,15 @@ read_gpu_busy() {
     printf 'NA'
 }
 
+# "some" means at least one task was stalled; "full" means every task was,
+# which is what a freeze is. Only "some" used to be recorded, which left the
+# stronger of the two signals on the floor.
 read_pressure_avg10() {
     local pressure_file="$1"
+    local kind="${2:-some}"
 
-    awk '
-        /^some / {
+    awk -v kind="${kind}" '
+        $1 == kind {
             for (i = 1; i <= NF; i++) {
                 if ($i ~ /^avg10=/) {
                     sub(/^avg10=/, "", $i)
@@ -140,6 +149,14 @@ read_pressure_avg10() {
             }
         }
     ' "${pressure_file}" 2>/dev/null
+}
+
+# Uninterruptible sleep is the state a task sits in while the kernel waits on a
+# device. A pile-up is the signature of a machine that has stopped on storage
+# rather than on the CPU, and it inflates the load average without using any.
+read_dstate_count() {
+    "${ps_bin}" -eo stat= 2>/dev/null |
+        awk '$1 ~ /^D/ { count++ } END { print count + 0 }'
 }
 
 record_docker_sample() {
@@ -278,6 +295,25 @@ record_event_if_needed() {
     local gpu_temp="$3"
     local mem_available_kib="$4"
     local io_pressure="$5"
+    local memory_pressure_full="$6"
+    local io_pressure_full="$7"
+    local dstate_count="$8"
+
+    # Full pressure means nothing ran at all for that share of the window, so
+    # it warrants a lower threshold than the "some" figure above.
+    if awk -v memory="${memory_pressure_full}" -v io="${io_pressure_full}" \
+        -v threshold="${warn_pressure_full}" \
+        'BEGIN { exit !(memory + 0 >= threshold || io + 0 >= threshold) }'; then
+        printf '%s\tWARN\tEverything stalled: memory full avg10 %s, I/O full avg10 %s\n' \
+            "${timestamp}" "${memory_pressure_full}" "${io_pressure_full}" \
+            >> "${event_log}"
+    fi
+
+    if [[ "${dstate_count}" =~ ^[0-9]+$ ]] &&
+       (( dstate_count >= warn_dstate_count )); then
+        printf '%s\tWARN\t%s processes in uninterruptible sleep\n' \
+            "${timestamp}" "${dstate_count}" >> "${event_log}"
+    fi
 
     if [[ "${cpu_temp}" != "NA" ]] && (( cpu_temp >= 90000 )); then
         printf '%s\tWARN\tCPU temperature %.1f C\n' \
@@ -347,6 +383,20 @@ sample_is_elevated() {
     local mem_available_kib="$3"
     local memory_pressure="$4"
     local io_pressure="$5"
+    local memory_pressure_full="$6"
+    local io_pressure_full="$7"
+    local dstate_count="$8"
+
+    if [[ "${dstate_count}" =~ ^[0-9]+$ ]] &&
+       (( dstate_count >= elevated_dstate_count )); then
+        return 0
+    fi
+
+    if awk -v memory="${memory_pressure_full}" -v io="${io_pressure_full}" \
+        -v threshold="${elevated_pressure_full}" \
+        'BEGIN { exit !(memory + 0 >= threshold || io + 0 >= threshold) }'; then
+        return 0
+    fi
 
     if [[ "${cpu_temp}" != "NA" ]] && (( cpu_temp >= elevated_temp_mC )); then
         return 0
@@ -420,7 +470,9 @@ report_previous_session() {
 }
 
 write_log_headers() {
-    printf 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\n' > "${metrics_log}"
+    # New columns are appended, never inserted. The dashboard reads these files
+    # by position, so a file written by an older version has to keep parsing.
+    printf 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\tcpu_psi_full_avg10\tmemory_psi_full_avg10\tio_psi_full_avg10\tdstate_count\n' > "${metrics_log}"
     printf 'timestamp\tepoch\tcontainer\tis_tracked_project\tcpu_pct\tmemory_usage\ttasks\tprocesses\tzombies\toom_killed\trestart_count\n' > "${docker_log}"
 }
 
@@ -539,8 +591,18 @@ while true; do
     memory_pressure="${memory_pressure:-NA}"
     io_pressure="${io_pressure:-NA}"
 
+    cpu_pressure_full="$(read_pressure_avg10 "${pressure_root}/cpu" full)"
+    memory_pressure_full="$(read_pressure_avg10 "${pressure_root}/memory" full)"
+    io_pressure_full="$(read_pressure_avg10 "${pressure_root}/io" full)"
+    cpu_pressure_full="${cpu_pressure_full:-NA}"
+    memory_pressure_full="${memory_pressure_full:-NA}"
+    io_pressure_full="${io_pressure_full:-NA}"
+
+    dstate_count="$(read_dstate_count)"
+    dstate_count="${dstate_count:-NA}"
+
     top_processes="$(
-        ps -eo comm=,%cpu=,%mem= --sort=-%cpu 2>/dev/null |
+        "${ps_bin}" -eo comm=,%cpu=,%mem= --sort=-%cpu 2>/dev/null |
             head -5 |
             awk '
                 {
@@ -566,7 +628,7 @@ while true; do
         kernel_cursor="$(read_kernel_cursor)"
     fi
 
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "${timestamp}" "${epoch}" "${uptime_seconds}" \
         "${load1}" "${load5}" "${load15}" \
         "${mem_available_kib}" "${swap_used_kib}" "${root_used_pct}" \
@@ -575,15 +637,19 @@ while true; do
         "${docker_state}" "${docker_container_count}" "${docker_task_count}" \
         "${tracked_container_count}" "${tracked_task_count}" \
         "${tracked_process_count}" "${tracked_zombie_count}" \
-        "${top_processes}" >> "${metrics_log}"
+        "${top_processes}" \
+        "${cpu_pressure_full}" "${memory_pressure_full}" "${io_pressure_full}" \
+        "${dstate_count}" >> "${metrics_log}"
 
     record_event_if_needed \
         "${timestamp}" "${cpu_temp}" "${gpu_temp}" \
-        "${mem_available_kib}" "${io_pressure}"
+        "${mem_available_kib}" "${io_pressure}" \
+        "${memory_pressure_full}" "${io_pressure_full}" "${dstate_count}"
 
     if ((stalled == 1)) || ((kernel_alert_seen == 1)) || sample_is_elevated \
         "${cpu_temp}" "${gpu_temp}" "${mem_available_kib}" \
-        "${memory_pressure}" "${io_pressure}"; then
+        "${memory_pressure}" "${io_pressure}" \
+        "${memory_pressure_full}" "${io_pressure_full}" "${dstate_count}"; then
         if ((write_through == 0)); then
             write_through=1
             printf '%s\tFLUSH\tconditions elevated, writing every sample through\n' \

@@ -80,8 +80,23 @@ log. The collector says so once at startup and carries on. `/sys/fs/pstore`,
 where a panic leaves its remnants, is root-only on every distribution checked,
 so it is not consulted.
 
+## Signals
+
+Linux pressure accounting reports two figures per resource. `some` counts time
+where at least one task was stalled; `full` counts time where every task was,
+which is what a freeze is from the kernel's point of view. Both are recorded,
+and `full` carries the lower alerting threshold of the two.
+
+Processes in uninterruptible sleep are counted for the same reason. That state
+is where a task waits on a device, so a pile-up points at storage rather than
+at the CPU, and it raises the load average without consuming any CPU at all.
+
 ## Compatibility
 
 The first private deployment used `runtelenexus_*` field names. The public
 schema uses `tracked_*` names at the same column positions, so the dashboard
 can continue reading earlier files.
+
+New columns are appended, never inserted, for the same reason. A file written
+by an older collector simply stops short of the newest columns, and the
+dashboard reads the absent ones as missing data.
