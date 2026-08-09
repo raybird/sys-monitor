@@ -306,23 +306,22 @@ run_collector() {
     XDG_STATE_HOME="${state}" \
     FREEZE_WATCH_COMPOSE_PROJECT="" \
     FREEZE_WATCH_MAX_SAMPLES=1 \
-    "$@" \
-        "${test_home}/.local/bin/freeze-monitor"
+        env "$@" "${test_home}/.local/bin/freeze-monitor"
 }
 
 seed_previous_session "${test_root}/state-freeze" "00000000-0000-0000-0000-000000000000" ""
-run_collector "${test_root}/state-freeze" env
+run_collector "${test_root}/state-freeze"
 grep -q $'\tFREEZE\t' "${test_root}/state-freeze/freeze-monitor/events.log"
 grep -q 'last_sample=2026-08-09T10:00:10+08:00' \
     "${test_root}/state-freeze/freeze-monitor/events.log"
 
 seed_previous_session "${test_root}/state-interrupted" "${current_boot}" ""
-run_collector "${test_root}/state-interrupted" env
+run_collector "${test_root}/state-interrupted"
 grep -q $'\tINTERRUPTED\t' \
     "${test_root}/state-interrupted/freeze-monitor/events.log"
 
 seed_previous_session "${test_root}/state-clean" "00000000-0000-0000-0000-000000000000" "STOP"
-run_collector "${test_root}/state-clean" env
+run_collector "${test_root}/state-clean"
 if grep -qE $'\t(FREEZE|INTERRUPTED)\t' \
     "${test_root}/state-clean/freeze-monitor/events.log"; then
     printf 'a clean shutdown was reported as a freeze\n' >&2
@@ -339,6 +338,78 @@ FREEZE_WATCH_INTERVAL_SECONDS=1 \
 FREEZE_WATCH_STALL_SECONDS=1 \
     "${test_home}/.local/bin/freeze-monitor"
 grep -q $'\tGAP\t' "${test_root}/state-gap/freeze-monitor/events.log"
+
+# Kernel evidence is read through journalctl so that group permissions and the
+# previous boot both work. A stub stands in for it.
+stub_journalctl="${test_home}/stub-journalctl"
+cat > "${stub_journalctl}" <<'STUB'
+#!/usr/bin/env bash
+case "$*" in
+    *--show-cursor*) printf -- '-- cursor: s=stub;i=1;b=stub\n'; exit 0 ;;
+    *"-b -1"*) cat "${FREEZE_WATCH_STUB_PREVIOUS_BOOT:-/dev/null}"; exit 0 ;;
+    *--after-cursor*) cat "${FREEZE_WATCH_STUB_KERNEL:-/dev/null}"; exit 0 ;;
+esac
+exit "${FREEZE_WATCH_STUB_PROBE_STATUS:-0}"
+STUB
+chmod 0755 "${stub_journalctl}"
+
+cat > "${test_root}/kernel-alerts.txt" <<'LOG'
+usb 1-3: new high-speed USB device number 5 using xhci_hcd
+i915 0000:00:02.0: [drm] GPU HANG: ecode 12:1:85dffffb, in gnome-shell [3210]
+Adding 2097148k swap on /swapfile
+INFO: task kworker/2:1:184 blocked for more than 122 seconds.
+LOG
+
+run_kernel_scan() {
+    local state="$1"
+    shift
+
+    HOME="${test_home}" \
+    XDG_STATE_HOME="${state}" \
+    FREEZE_WATCH_COMPOSE_PROJECT="" \
+    FREEZE_WATCH_MAX_SAMPLES=1 \
+    FREEZE_WATCH_JOURNALCTL="${stub_journalctl}" \
+        env "$@" "${test_home}/.local/bin/freeze-monitor"
+}
+
+run_kernel_scan "${test_root}/state-kernel" \
+    FREEZE_WATCH_STUB_KERNEL="${test_root}/kernel-alerts.txt"
+readonly kernel_events="${test_root}/state-kernel/freeze-monitor/events.log"
+grep -q 'GPU HANG' "${kernel_events}"
+grep -q 'blocked for more than' "${kernel_events}"
+
+# Ordinary boot chatter must not be promoted to an incident.
+if grep -qE 'new high-speed USB device|Adding .* swap' "${kernel_events}"; then
+    printf 'routine kernel messages were reported as incidents\n' >&2
+    exit 1
+fi
+
+# The previous boot is only read when the machine went down without shutting
+# down, otherwise every restart would replay the same lines.
+seed_previous_session "${test_root}/state-kernel-freeze" \
+    "00000000-0000-0000-0000-000000000000" ""
+run_kernel_scan "${test_root}/state-kernel-freeze" \
+    FREEZE_WATCH_STUB_PREVIOUS_BOOT="${test_root}/kernel-alerts.txt"
+grep -q 'previous boot: .*GPU HANG' \
+    "${test_root}/state-kernel-freeze/freeze-monitor/events.log"
+
+seed_previous_session "${test_root}/state-kernel-clean" \
+    "00000000-0000-0000-0000-000000000000" "STOP"
+run_kernel_scan "${test_root}/state-kernel-clean" \
+    FREEZE_WATCH_STUB_PREVIOUS_BOOT="${test_root}/kernel-alerts.txt"
+if grep -q 'previous boot:' \
+    "${test_root}/state-kernel-clean/freeze-monitor/events.log"; then
+    printf 'the previous boot was replayed after a clean shutdown\n' >&2
+    exit 1
+fi
+
+# An unreadable journal is normal for a user outside the adm group, and has to
+# degrade rather than fail.
+run_kernel_scan "${test_root}/state-no-journal" FREEZE_WATCH_STUB_PROBE_STATUS=1
+grep -q 'kernel log unavailable' \
+    "${test_root}/state-no-journal/freeze-monitor/events.log"
+test -n "$(find "${test_root}/state-no-journal/freeze-monitor" \
+    -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
 
 # Elevated conditions switch the log to write-through, which is announced once
 # on the transition rather than on every sample.

@@ -31,7 +31,7 @@ STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
 HWMON_ROOT = Path(os.environ.get("FREEZE_WATCH_HWMON_ROOT", "/sys/class/hwmon"))
 # FREEZE and GAP are the reason the collector exists, so they outrank the
 # routine housekeeping entries when the dashboard picks what to show.
-NOTEWORTHY_EVENTS = ("FREEZE", "INTERRUPTED", "GAP", "WARN", "ROTATE")
+NOTEWORTHY_EVENTS = ("FREEZE", "KERNEL", "INTERRUPTED", "GAP", "WARN", "ROTATE")
 WINDOW_MIN_WIDTH = 720
 WINDOW_MIN_HEIGHT = 540
 WINDOW_PREFERRED_WIDTH = 1040

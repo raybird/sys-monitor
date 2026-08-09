@@ -24,6 +24,33 @@ The answer is recorded as `FREEZE_WATCH_PYTHON` in
 launcher read it from there. Editing that line is enough to move an existing
 installation to a different interpreter.
 
+## The events log says the kernel log is unavailable
+
+Reading kernel messages needs group membership:
+
+```bash
+id -nG | tr ' ' '\n' | grep -E 'adm|systemd-journal'
+sudo usermod -aG adm "$USER"
+```
+
+Log out and back in afterwards. Everything else keeps working without it; only
+`KERNEL` events are lost.
+
+Kernel messages also have to survive the reboot that follows a freeze. Check
+that the journal is persistent rather than in-memory:
+
+```bash
+test -d /var/log/journal && echo persistent || echo volatile
+```
+
+If it reports `volatile`, create the directory and restart journald, otherwise
+every forced reboot discards the evidence:
+
+```bash
+sudo mkdir -p /var/log/journal
+sudo systemctl restart systemd-journald
+```
+
 ## The tray icon is missing
 
 Confirm the service is running:

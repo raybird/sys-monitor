@@ -50,6 +50,29 @@ elevated, when each sample is written through. The thresholds for that sit
 below the ones that raise a warning, so the evidence is already durable before
 anything is worth warning about. `FLUSH` marks each transition.
 
+## Kernel evidence
+
+Metrics describe load; they do not say that the GPU driver reset or that a task
+blocked for two minutes. `KERNEL` events carry those lines, matched against a
+list confined to what explains a machine that stopped responding: hung tasks,
+RCU stalls, DRM and GPU hangs, NVMe and ATA timeouts, machine checks, OOM
+kills, thermal throttling, and filesystem I/O errors.
+
+Reading goes through `journalctl` rather than `/dev/kmsg`, because it honours
+group membership and can reach the boot before this one. Each scan resumes from
+a cursor, so no line is reported twice, and output is capped per scan: one
+failing device can emit thousands of near-identical lines, and a log that
+scrolls past the freeze is no better than no log. A match also switches the
+collector to write-through.
+
+The previous boot is read only when the machine went down without shutting
+down, which is the one time those lines are worth replaying.
+
+Users outside the `adm` and `systemd-journal` groups cannot read the kernel
+log. The collector says so once at startup and carries on. `/sys/fs/pstore`,
+where a panic leaves its remnants, is root-only on every distribution checked,
+so it is not consulted.
+
 ## Compatibility
 
 The first private deployment used `runtelenexus_*` field names. The public

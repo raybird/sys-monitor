@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0 - 2026-08-09
+
+- Record `KERNEL` events for the messages that explain a machine which stopped
+  responding: hung tasks, RCU stalls, DRM and GPU hangs, NVMe and ATA timeouts,
+  machine checks, OOM kills, thermal throttling, and filesystem I/O errors.
+  Metrics describe load and never said that the GPU driver had reset.
+- Read the previous boot's kernel log after an unclean shutdown, which is the
+  one time those lines are worth replaying.
+- Switch to write-through when a kernel message matches, on the assumption that
+  more is about to go wrong.
+- Say so once and carry on when the kernel log cannot be read, which is the
+  normal case for a user outside the `adm` and `systemd-journal` groups.
+
 ## 0.3.0 - 2026-08-09
 
 - Report how the previous session ended. A session that never wrote `STOP` was

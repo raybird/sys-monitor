@@ -22,6 +22,16 @@ readonly stall_threshold_seconds="${FREEZE_WATCH_STALL_SECONDS:-$((interval_seco
 readonly elevated_temp_mC=80000
 readonly elevated_mem_available_kib=$((2 * 1024 * 1024))
 readonly elevated_pressure=5.0
+
+readonly journalctl_bin="${FREEZE_WATCH_JOURNALCTL:-journalctl}"
+readonly kernel_every_samples=30
+readonly kernel_alerts_per_scan=3
+
+# Kernel messages that precede or explain a machine that stopped responding.
+# The log is read to answer "why did it stop", not to audit the boot, so
+# anything else is noise. journalctl is preferred over /dev/kmsg because it
+# respects group permissions and can reach the boot before this one.
+readonly kernel_alert_pattern='hung_task|blocked for more than [0-9]+ seconds|detected stalls? on CPU|INFO: rcu|GPU HANG|\[drm\].*(reset|hang|timeout)|ring [a-z0-9_.]+ timeout|nvme.*(timeout|controller is down|resetting)|[Mm]achine [Cc]heck|mce: \[Hardware Error\]|Out of memory: Kill|oom-kill:|above threshold, cpu clock throttled|EXT4-fs error|Buffer I/O error|ata[0-9]+\.[0-9]+: failed command'
 readonly compose_project="${FREEZE_WATCH_COMPOSE_PROJECT:-}"
 readonly max_samples="${FREEZE_WATCH_MAX_SAMPLES:-0}"
 readonly state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/freeze-monitor"
@@ -62,6 +72,11 @@ tracked_process_count="NA"
 tracked_zombie_count="NA"
 last_docker_state=""
 last_docker_alert=""
+kernel_log_state="unknown"
+kernel_cursor=""
+last_kernel_alert=""
+kernel_alert_seen=0
+scan_previous_boot=0
 
 # Accepts several driver names and returns the first one present, so the
 # argument order expresses preference rather than whatever order the kernel
@@ -284,6 +299,44 @@ record_event_if_needed() {
     fi
 }
 
+kernel_log_available() {
+    command -v "${journalctl_bin}" >/dev/null 2>&1 &&
+        "${journalctl_bin}" -k -n 0 >/dev/null 2>&1
+}
+
+read_kernel_cursor() {
+    "${journalctl_bin}" -k -n 0 --show-cursor 2>/dev/null |
+        sed -n 's/^-- cursor: //p'
+}
+
+# Reports the interesting kernel lines produced by the given journalctl
+# arguments. Output is capped because one failing device can produce thousands
+# of near-identical lines, and a log that scrolls past the freeze is no better
+# than no log.
+scan_kernel_log() {
+    local timestamp="$1"
+    local prefix="$2"
+    shift 2
+    local line
+    local count=0
+
+    while IFS= read -r line; do
+        [[ -n "${line}" ]] || continue
+        line="${line//$'\t'/ }"
+        line="${line:0:200}"
+        [[ "${line}" == "${last_kernel_alert}" ]] && continue
+        last_kernel_alert="${line}"
+        kernel_alert_seen=1
+        printf '%s\tKERNEL\t%s%s\n' \
+            "${timestamp}" "${prefix}" "${line}" >> "${event_log}"
+        count=$((count + 1))
+        ((count >= kernel_alerts_per_scan)) && break
+    done < <(
+        "${journalctl_bin}" "$@" -o cat --no-pager 2>/dev/null |
+            grep -aE "${kernel_alert_pattern}" || true
+    )
+}
+
 sample_is_elevated() {
     local cpu_temp="$1"
     local gpu_temp="$2"
@@ -350,6 +403,9 @@ report_previous_session() {
     fi
 
     if [[ "${previous_boot}" != "${boot_id}" ]]; then
+        # Only an unclean reboot justifies reading the previous boot's kernel
+        # log. Doing it on every restart would replay the same lines forever.
+        scan_previous_boot=1
         printf '%s\tFREEZE\tprevious session ended without shutting down; last_sample=%s%s metrics=%s\n' \
             "${timestamp}" "${last_sample}" "${silence}" \
             "${previous_metrics:-unknown}" >> "${event_log}"
@@ -408,6 +464,18 @@ trap on_signal INT TERM
 write_log_headers
 start_timestamp="$(date --iso-8601=seconds)"
 report_previous_session "${start_timestamp}" "$(date +%s)"
+
+if kernel_log_available; then
+    kernel_log_state="ok"
+    kernel_cursor="$(read_kernel_cursor)"
+    if ((scan_previous_boot == 1)); then
+        scan_kernel_log "${start_timestamp}" "previous boot: " -k -b -1
+    fi
+else
+    kernel_log_state="unavailable"
+    printf '%s\tINFO\tkernel log unavailable; add this user to the adm or systemd-journal group\n' \
+        "${start_timestamp}" >> "${event_log}"
+fi
 printf '%s\tSTART\tboot=%s metrics=%s interval=%ss flush=%ss\n' \
     "${start_timestamp}" "${boot_id}" "${metrics_log}" \
     "${interval_seconds}" "$((interval_seconds * flush_every_samples))" \
@@ -487,6 +555,13 @@ while true; do
         record_docker_sample "${timestamp}" "${epoch}"
     fi
 
+    kernel_alert_seen=0
+    if [[ "${kernel_log_state}" == "ok" ]] &&
+       (( sample_count % kernel_every_samples == 0 )); then
+        scan_kernel_log "${timestamp}" "" -k --after-cursor "${kernel_cursor}"
+        kernel_cursor="$(read_kernel_cursor)"
+    fi
+
     printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "${timestamp}" "${epoch}" "${uptime_seconds}" \
         "${load1}" "${load5}" "${load15}" \
@@ -502,7 +577,7 @@ while true; do
         "${timestamp}" "${cpu_temp}" "${gpu_temp}" \
         "${mem_available_kib}" "${io_pressure}"
 
-    if ((stalled == 1)) || sample_is_elevated \
+    if ((stalled == 1)) || ((kernel_alert_seen == 1)) || sample_is_elevated \
         "${cpu_temp}" "${gpu_temp}" "${mem_available_kib}" \
         "${memory_pressure}" "${io_pressure}"; then
         if ((write_through == 0)); then
