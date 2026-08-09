@@ -40,7 +40,16 @@ from xml.etree import ElementTree
 for icon in Path("${repo_dir}/assets/icons").rglob("*.svg"):
     ElementTree.parse(icon)
 PY
-"${python_bin}" -m unittest discover -s "${repo_dir}/tests" -v
+# Widget measurements need a display, and GTK 4 segfaults without one, so a
+# virtual server is used when the suite runs headless. The tests that need it
+# skip themselves when neither is available.
+if [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] || ! command -v xvfb-run >/dev/null 2>&1; then
+    "${python_bin}" -m unittest discover -s "${repo_dir}/tests" -v
+else
+    # The GL renderer cannot initialise against a virtual framebuffer.
+    GSK_RENDERER=cairo \
+        xvfb-run -a "${python_bin}" -m unittest discover -s "${repo_dir}/tests" -v
+fi
 
 if command -v shellcheck >/dev/null 2>&1; then
     shellcheck "${shell_sources[@]}"

@@ -17,7 +17,9 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3-gi python3-dbus gir1.2-gtk-4.0 shellcheck
+          sudo apt-get install -y \
+            python3-gi python3-dbus gir1.2-gtk-4.0 shellcheck xvfb \
+            desktop-file-utils
 
       - name: Verify the tag matches VERSION
         run: |

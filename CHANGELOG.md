@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.4 - 2026-08-09
+
+- Stop the dashboard from opening wider than the screen. Event and container
+  rows carry arbitrary strings, and a label that can neither wrap nor ellipsize
+  reports its whole text width as its minimum, which the horizontal scroll
+  policy passed straight to the window. A single event line naming an absolute
+  path forced a 2624px window onto an 1854px screen.
+- Clamp the initial window size to the monitor, leaving room for panels.
+- Measure widget widths in the test suite, under Xvfb when headless, so the
+  overflow cannot come back unnoticed.
+
 ## 0.2.3 - 2026-08-08
 
 - Restart running units when reinstalling. `enable --now` does nothing to a

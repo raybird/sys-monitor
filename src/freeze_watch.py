@@ -18,7 +18,7 @@ import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Gdk", "4.0")
-from gi.repository import Gdk, Gio, GLib, Gtk
+from gi.repository import Gdk, Gio, GLib, Gtk, Pango
 
 
 APP_ID = "com.raybird.FreezeWatch"
@@ -29,6 +29,11 @@ DBUS_PROPERTIES = "org.freedesktop.DBus.Properties"
 SNI_PATH = "/StatusNotifierItem"
 STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "freeze-monitor"
 HWMON_ROOT = Path(os.environ.get("FREEZE_WATCH_HWMON_ROOT", "/sys/class/hwmon"))
+WINDOW_MIN_WIDTH = 720
+WINDOW_MIN_HEIGHT = 540
+WINDOW_PREFERRED_WIDTH = 1040
+WINDOW_PREFERRED_HEIGHT = 760
+WINDOW_SCREEN_MARGIN = 80
 
 # Kept in step with the same lists in the freeze-monitor collector.
 CPU_TEMP_SENSORS = ("k10temp", "coretemp", "zenpower", "k8temp", "cpu_thermal")
@@ -120,6 +125,17 @@ def read_hwmon_temperature(*wanted_names: str) -> float | None:
             except (OSError, ValueError):
                 continue
     return None
+
+
+def clamp_window_size(screen_width: int, screen_height: int) -> tuple[int, int]:
+    """Fit the preferred size onto the screen without going below the minimum."""
+    return (
+        max(WINDOW_MIN_WIDTH, min(WINDOW_PREFERRED_WIDTH, screen_width - WINDOW_SCREEN_MARGIN)),
+        max(
+            WINDOW_MIN_HEIGHT,
+            min(WINDOW_PREFERRED_HEIGHT, screen_height - WINDOW_SCREEN_MARGIN),
+        ),
+    )
 
 
 def direct_temperatures() -> dict[str, float | None]:
@@ -416,8 +432,21 @@ class FreezeWatch(Gtk.Application):
             )
 
     @staticmethod
-    def _label(text: str = "", css_class: str | None = None, xalign: float = 0) -> Gtk.Label:
+    def _label(
+        text: str = "",
+        css_class: str | None = None,
+        xalign: float = 0,
+        ellipsize: bool = False,
+    ) -> Gtk.Label:
         label = Gtk.Label(label=text, xalign=xalign)
+        if ellipsize:
+            # A label that can neither wrap nor ellipsize reports the width of
+            # its whole text as its minimum. The horizontal scroll policy hands
+            # that minimum straight to the window, so any row carrying an
+            # arbitrary string has to be able to shorten itself. Fixed captions
+            # are left alone: making them shrinkable only lets the layout
+            # squeeze them below their natural width.
+            label.set_ellipsize(Pango.EllipsizeMode.END)
         if css_class:
             label.add_css_class(css_class)
         return label
@@ -436,8 +465,8 @@ class FreezeWatch(Gtk.Application):
 
     def _build_window(self) -> None:
         self.window = Gtk.ApplicationWindow(application=self, title="Freeze Watch")
-        self.window.set_default_size(1040, 760)
-        self.window.set_size_request(720, 540)
+        self.window.set_default_size(*self._default_window_size())
+        self.window.set_size_request(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT)
         self.window.connect("close-request", self._hide_on_close)
 
         header = Gtk.HeaderBar()
@@ -535,8 +564,25 @@ class FreezeWatch(Gtk.Application):
         content.append(self._label("目前最活躍程序", "section-title"))
         self.labels["top_processes"] = self._label("—", "muted")
         self.labels["top_processes"].set_wrap(True)
-        self.labels["top_processes"].set_wrap_mode(2)
+        self.labels["top_processes"].set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.labels["top_processes"].set_max_width_chars(40)
         content.append(self.labels["top_processes"])
+    @staticmethod
+    def _default_window_size() -> tuple[int, int]:
+        """Open no larger than the monitor, leaving room for panels."""
+        display = Gdk.Display.get_default()
+        monitors = display.get_monitors() if display is not None else None
+        monitor = (
+            monitors.get_item(0)
+            if monitors is not None and monitors.get_n_items()
+            else None
+        )
+        if monitor is None:
+            return WINDOW_PREFERRED_WIDTH, WINDOW_PREFERRED_HEIGHT
+
+        area = monitor.get_geometry()
+        return clamp_window_size(area.width, area.height)
+
     def _hide_on_close(self, _window) -> bool:
         self.window.hide()
         return True
@@ -568,14 +614,14 @@ class FreezeWatch(Gtk.Application):
         container_row.add_css_class("data-row")
         content = Gtk.Box(spacing=10)
         content.add_css_class("list-row")
-        name = self._label(row.get("container", "unknown"), None)
+        name = self._label(row.get("container", "unknown"), None, ellipsize=True)
         name.set_hexpand(True)
         cpu = row.get("cpu_pct", "—")
         memory = row.get("memory_usage", "—").split(" / ")[0]
         zombies = row.get("zombies", "—")
         detail = f"{cpu}  ·  {memory}  ·  Z {zombies}"
         content.append(name)
-        content.append(self._label(detail, "muted", 1))
+        content.append(self._label(detail, "muted", 1, ellipsize=True))
         container_row.set_child(content)
         self.container_list.append(container_row)
 
@@ -589,8 +635,8 @@ class FreezeWatch(Gtk.Application):
         parts = event.split("\t", 2)
         timestamp = parts[0] if parts else "—"
         message = parts[-1] if parts else event
-        content.append(self._label(message, None))
-        content.append(self._label(timestamp, "muted"))
+        content.append(self._label(message, None, ellipsize=True))
+        content.append(self._label(timestamp, "muted", ellipsize=True))
         row.set_child(content)
         self.event_list.append(row)
 
