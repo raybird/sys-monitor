@@ -9,7 +9,8 @@ Freeze Watch 是一套輕量 Linux 凍結診斷工具，包含背景採樣器、
 
 - CPU、GPU、NVMe 溫度，支援 AMD、Intel 與 ARM 平台
 - 負載、記憶體、swap、磁碟與 Linux PSI 壓力（含 full 與不可中斷睡眠程序數）
-- GPU busy 與最活躍程序
+- GPU busy、CPU 與記憶體最活躍程序
+- CPU 熱節流、swap 進出、major fault 與磁碟佇列
 - Docker CPU、記憶體、tasks、OOM、重啟與 zombie
 - 可指定一個 Docker Compose project 做深度程序觀測
 - 系統列即時顯示 `CPU 58°`

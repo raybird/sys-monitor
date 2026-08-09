@@ -14,7 +14,8 @@ the period immediately before a forced reboot.
 - CPU, GPU, and NVMe temperatures on AMD, Intel, and ARM hardware
 - load averages, memory, swap, filesystem usage, and Linux PSI pressure,
   including the `full` figures and processes in uninterruptible sleep
-- GPU busy percentage and top CPU processes
+- GPU busy percentage, and top processes by CPU and by memory
+- CPU throttling, swap traffic, major faults, and disk queue depth
 - Docker CPU, memory, task counts, OOM state, restarts, and zombie detection
 - optional deep monitoring of one Docker Compose project
 - live `CPU 58°` StatusNotifier/AppIndicator label

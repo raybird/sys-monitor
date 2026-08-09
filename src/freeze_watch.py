@@ -38,6 +38,9 @@ INCIDENT_KINDS = ("FREEZE", "GAP")
 INCIDENT_LIMIT = 8
 INCIDENT_WINDOW_SECONDS = 30 * 60
 EVENT_HISTORY_LIMIT = 12
+# Matches the collector's default. Only used to turn busy milliseconds into a
+# share of the interval, so a mismatch misreads that one figure and nothing else.
+SAMPLE_INTERVAL_SECONDS = 10
 WINDOW_MIN_WIDTH = 720
 WINDOW_MIN_HEIGHT = 540
 WINDOW_PREFERRED_WIDTH = 1040
@@ -62,7 +65,8 @@ METRICS_FIELDS = [
     # Appended, never inserted: these files are read by position, and one
     # written before this release simply stops short of them.
     "cpu_psi_full_avg10", "memory_psi_full_avg10", "io_psi_full_avg10",
-    "dstate_count",
+    "dstate_count", "cpu_throttle_count", "swapin_pages", "swapout_pages",
+    "majfault_count", "disk_in_flight", "disk_busy_ms", "top_memory_processes",
 ]
 DOCKER_FIELDS = [
     "timestamp", "epoch", "container", "is_tracked_project", "cpu_pct",
@@ -227,6 +231,15 @@ def format_temperature(value: float | None) -> str:
 
 def format_gib(kib: int | None) -> str:
     return "—" if kib is None else f"{kib / 1024 / 1024:.1f} GiB"
+
+
+def format_busy(busy_ms: Any, interval_seconds: int) -> str:
+    """Disk busy time as a share of the sampling interval."""
+    milliseconds = as_float(busy_ms)
+    if milliseconds is None or interval_seconds <= 0:
+        return "—"
+    share = milliseconds / (interval_seconds * 1000) * 100
+    return f"{min(share, 100):.0f}%"
 
 
 def read_hwmon_temperature(*wanted_names: str) -> float | None:
@@ -740,12 +753,16 @@ class FreezeWatch(Gtk.Application):
         split.attach(right_column, 1, 0, 1, 1)
         content.append(split)
 
-        content.append(self._label("目前最活躍程序", "section-title"))
-        self.labels["top_processes"] = self._label("—", "muted")
-        self.labels["top_processes"].set_wrap(True)
-        self.labels["top_processes"].set_wrap_mode(Pango.WrapMode.WORD_CHAR)
-        self.labels["top_processes"].set_max_width_chars(40)
-        content.append(self.labels["top_processes"])
+        for key, title in (
+            ("top_processes", "目前最活躍程序"),
+            ("top_memory_processes", "佔用記憶體最多的程序"),
+        ):
+            content.append(self._label(title, "section-title"))
+            self.labels[key] = self._label("—", "muted")
+            self.labels[key].set_wrap(True)
+            self.labels[key].set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+            self.labels[key].set_max_width_chars(40)
+            content.append(self.labels[key])
     @staticmethod
     def _default_window_size() -> tuple[int, int]:
         """Open no larger than the monitor, leaving room for panels."""
@@ -956,16 +973,25 @@ class FreezeWatch(Gtk.Application):
         available_kib = as_int(latest_metric.get("mem_available_kib"))
         self.labels["hero_memory"].set_text(f"可用記憶體 {format_gib(available_kib)}")
 
+        # Throttling belongs beside the temperature that caused it.
+        throttles = latest_metric.get("cpu_throttle_count", "—")
+        cpu_detail = "核心溫度"
+        if throttles not in ("—", "NA", None):
+            cpu_detail = f"核心溫度 · 節流 {throttles} 次"
+
         for name, value, detail in (
-            ("cpu", temperatures["cpu"], "核心溫度"),
+            ("cpu", temperatures["cpu"], cpu_detail),
             ("gpu", temperatures["gpu"], "顯示核心"),
             ("nvme", temperatures["nvme"], "儲存裝置"),
         ):
             self._update_temperature_card(name, value, detail, temperature_level({name: value}))
 
         self.labels["system_0"].set_text(format_gib(available_kib))
+        # Swap read back is the one that hurts: it is memory the machine had
+        # already given away and now has to wait for.
         self.labels["system_detail_0"].set_text(
-            f"swap {format_gib(as_int(latest_metric.get('swap_used_kib')))}"
+            f"swap {format_gib(as_int(latest_metric.get('swap_used_kib')))} · "
+            f"換入 {latest_metric.get('swapin_pages', '—')} 頁"
         )
         self.labels["system_1"].set_text(
             latest_metric.get("load1", "—")
@@ -988,10 +1014,15 @@ class FreezeWatch(Gtk.Application):
         self.labels["system_3"].set_text(
             f"{latest_metric.get('root_used_pct', '—')}%"
         )
-        self.labels["system_detail_3"].set_text("根目錄使用率")
-        self.labels["top_processes"].set_text(
-            latest_metric.get("top_processes", "尚無程序資料").replace(";", "    ·    ")
+        self.labels["system_detail_3"].set_text(
+            f"根目錄 · 佇列 {latest_metric.get('disk_in_flight', '—')} · "
+            f"忙碌 {format_busy(latest_metric.get('disk_busy_ms'), SAMPLE_INTERVAL_SECONDS)}"
         )
+        for key in ("top_processes", "top_memory_processes"):
+            listing = latest_metric.get(key) or "尚無程序資料"
+            if listing == "NA":
+                listing = "尚無程序資料"
+            self.labels[key].set_text(listing.replace(";", "    ·    "))
 
         if self.ribbon is not None:
             self.ribbon.set_history(metric_rows)

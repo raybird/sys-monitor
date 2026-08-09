@@ -313,8 +313,14 @@ live_metrics="$(find "${test_home}/.local/state/freeze-monitor" \
 readonly live_metrics
 head -1 "${live_metrics}" | grep -qF 'io_psi_full_avg10'
 head -1 "${live_metrics}" | grep -qF 'dstate_count'
-test "$(head -1 "${live_metrics}" | awk -F'\t' '{ print NF }')" = "28"
-test "$(awk -F'\t' 'NR == 2 { print NF }' "${live_metrics}")" = "28"
+head -1 "${live_metrics}" | grep -qF 'top_memory_processes'
+
+# Every row has to carry every column. A printf format shorter than its
+# argument list silently wraps and writes a second, mangled line.
+readonly metrics_columns=35
+test "$(awk -F'\t' 'NR == 1 { print NF }' "${live_metrics}")" = "${metrics_columns}"
+test "$(awk -F'\t' 'NR == 2 { print NF }' "${live_metrics}")" = "${metrics_columns}"
+test "$(awk -F'\t' 'END { print NR }' "${live_metrics}")" = "2"
 
 # Synthetic pressure files give "some" and "full" different values, so reading
 # the wrong line cannot pass by looking numeric.
@@ -355,6 +361,58 @@ test "$(awk -F'\t' 'NR == 2 { print $16 }' "${signals_metrics}")" = "7.77"
 test "$(awk -F'\t' 'NR == 2 { print $27 }' "${signals_metrics}")" = "3.33"
 # S, D, Sl, D+, DL, R: the three beginning with D are the ones that count.
 test "$(awk -F'\t' 'NR == 2 { print $28 }' "${signals_metrics}")" = "3"
+
+# Throttle counts, swap traffic, and disk queue depth are cumulative counters
+# read from files, so synthetic ones pin down both the reading and the delta.
+counters="${test_root}/counters"
+mkdir -p "${counters}/cpu/cpu0/thermal_throttle" "${counters}/cpu/cpu1/thermal_throttle"
+printf '4\n' > "${counters}/cpu/cpu0/thermal_throttle/package_throttle_count"
+printf '7\n' > "${counters}/cpu/cpu1/thermal_throttle/package_throttle_count"
+printf 'pswpin 500\npswpout 120\npgmajfault 9000\n' > "${counters}/vmstat"
+printf '259 0 %s 1 2 3 4 5 6 7 8 9 4242 11\n' \
+    "$(basename "$(readlink -f /sys/class/block/"$(basename \
+        "$(df -P / | awk 'NR == 2 { print $1 }')")" 2>/dev/null)" 2>/dev/null)" \
+    > "${counters}/diskstats" 2>/dev/null || true
+
+run_counter_sample() {
+    HOME="${test_home}" \
+    XDG_STATE_HOME="$1" \
+    FREEZE_WATCH_COMPOSE_PROJECT="" \
+    FREEZE_WATCH_MAX_SAMPLES=1 \
+    FREEZE_WATCH_CPU_ROOT="${counters}/cpu" \
+    FREEZE_WATCH_VMSTAT="${counters}/vmstat" \
+    FREEZE_WATCH_DISKSTATS="${counters}/diskstats" \
+        "${test_home}/.local/bin/freeze-monitor"
+}
+
+run_counter_sample "${test_root}/state-counters"
+counter_metrics="$(find "${test_root}/state-counters/freeze-monitor" \
+    -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
+readonly counter_metrics
+
+# The highest package count wins, not the first one enumerated.
+test "$(awk -F'\t' 'NR == 2 { print $29 }' "${counter_metrics}")" = "7"
+# A first sample has nothing to subtract from, so the deltas are unknown.
+test "$(awk -F'\t' 'NR == 2 { print $30 }' "${counter_metrics}")" = "NA"
+test "$(awk -F'\t' 'NR == 2 { print $32 }' "${counter_metrics}")" = "NA"
+test -n "$(awk -F'\t' 'NR == 2 { print $35 }' "${counter_metrics}")"
+
+# Advance the counters and take a second sample to prove the deltas subtract.
+printf 'pswpin 1700\npswpout 120\npgmajfault 9001\n' > "${counters}/vmstat"
+HOME="${test_home}" \
+XDG_STATE_HOME="${test_root}/state-counters-2" \
+FREEZE_WATCH_COMPOSE_PROJECT="" \
+FREEZE_WATCH_MAX_SAMPLES=2 \
+FREEZE_WATCH_INTERVAL_SECONDS=1 \
+FREEZE_WATCH_CPU_ROOT="${counters}/cpu" \
+FREEZE_WATCH_VMSTAT="${counters}/vmstat" \
+FREEZE_WATCH_DISKSTATS="${counters}/diskstats" \
+    "${test_home}/.local/bin/freeze-monitor"
+second_metrics="$(find "${test_root}/state-counters-2/freeze-monitor" \
+    -maxdepth 1 -name 'metrics-*.tsv' -print -quit)"
+readonly second_metrics
+# Unchanged counters between two samples must read as zero, not as unknown.
+test "$(awk -F'\t' 'NR == 3 { print $30 }' "${second_metrics}")" = "0"
 if grep -q 'I/O pressure' "${test_root}/state-no-psi/freeze-monitor/events.log"; then
     printf 'an absent pressure file raised a spurious warning\n' >&2
     exit 1

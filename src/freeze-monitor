@@ -57,6 +57,12 @@ readonly gpu_temp_sensors=(amdgpu radeon nouveau)
 readonly hwmon_root="${FREEZE_WATCH_HWMON_ROOT:-/sys/class/hwmon}"
 readonly pressure_root="${FREEZE_WATCH_PRESSURE_ROOT:-/proc/pressure}"
 readonly ps_bin="${FREEZE_WATCH_PS:-ps}"
+readonly cpu_root="${FREEZE_WATCH_CPU_ROOT:-/sys/devices/system/cpu}"
+readonly vmstat_file="${FREEZE_WATCH_VMSTAT:-/proc/vmstat}"
+readonly diskstats_file="${FREEZE_WATCH_DISKSTATS:-/proc/diskstats}"
+
+readonly elevated_swapin_pages=1000
+readonly warn_swapin_pages=10000
 
 mkdir -p "${state_dir}"
 umask 077
@@ -86,6 +92,11 @@ kernel_cursor=""
 last_kernel_alert=""
 kernel_alert_seen=0
 scan_previous_boot=0
+previous_swapin=""
+previous_swapout=""
+previous_majfault=""
+previous_busy_ms=""
+previous_throttle=""
 
 # Accepts several driver names and returns the first one present, so the
 # argument order expresses preference rather than whatever order the kernel
@@ -149,6 +160,68 @@ read_pressure_avg10() {
             }
         }
     ' "${pressure_file}" 2>/dev/null
+}
+
+# A temperature reading says the part was hot. This says the firmware did
+# something about it, which is what actually costs the machine its speed.
+read_throttle_count() {
+    local file
+    local value
+    local best="NA"
+
+    for file in "${cpu_root}"/cpu[0-9]*/thermal_throttle/package_throttle_count; do
+        [[ -r "${file}" ]] || continue
+        value="$(< "${file}")"
+        [[ "${value}" =~ ^[0-9]+$ ]] || continue
+        if [[ "${best}" == "NA" ]] || ((value > best)); then
+            best="${value}"
+        fi
+    done
+
+    printf '%s' "${best}"
+}
+
+read_vmstat_value() {
+    awk -v key="$1" '$1 == key { print $2; exit }' "${vmstat_file}" 2>/dev/null
+}
+
+# Queue depth and busy time for the disk holding the root filesystem. A device
+# that is saturated for whole seconds at a time looks exactly like a freeze.
+read_disk_stats() {
+    [[ -n "${root_disk}" ]] || { printf 'NA NA'; return; }
+
+    awk -v device="${root_disk}" '
+        $3 == device { print $12, $13; found = 1; exit }
+        END { if (!found) print "NA", "NA" }
+    ' "${diskstats_file}" 2>/dev/null
+}
+
+resolve_root_disk() {
+    local source name resolved
+
+    source="$(df -P / 2>/dev/null | awk 'NR == 2 { print $1 }')"
+    name="${source##*/}"
+    [[ -n "${name}" ]] || return
+
+    # A partition carries the whole-disk counters in its parent directory.
+    if [[ -e "/sys/class/block/${name}/partition" ]]; then
+        resolved="$(readlink -f "/sys/class/block/${name}" 2>/dev/null)"
+        [[ -n "${resolved}" ]] && name="$(basename "$(dirname "${resolved}")")"
+    fi
+
+    [[ -e "/sys/class/block/${name}" ]] && printf '%s' "${name}"
+}
+
+delta_since() {
+    local current="$1"
+    local previous="$2"
+
+    if [[ "${current}" =~ ^[0-9]+$ && "${previous}" =~ ^[0-9]+$ ]] &&
+       ((current >= previous)); then
+        printf '%s' "$((current - previous))"
+    else
+        printf 'NA'
+    fi
 }
 
 # Uninterruptible sleep is the state a task sits in while the kernel waits on a
@@ -298,6 +371,9 @@ record_event_if_needed() {
     local memory_pressure_full="$6"
     local io_pressure_full="$7"
     local dstate_count="$8"
+    local throttle_delta="$9"
+    local throttle_count="${10}"
+    local swapin_delta="${11}"
 
     # Full pressure means nothing ran at all for that share of the window, so
     # it warrants a lower threshold than the "some" figure above.
@@ -313,6 +389,19 @@ record_event_if_needed() {
        (( dstate_count >= warn_dstate_count )); then
         printf '%s\tWARN\t%s processes in uninterruptible sleep\n' \
             "${timestamp}" "${dstate_count}" >> "${event_log}"
+    fi
+
+    # Any increase at all is worth recording. Throttling is not a threshold to
+    # cross, it is the firmware having already taken speed away.
+    if [[ "${throttle_delta}" =~ ^[0-9]+$ ]] && (( throttle_delta > 0 )); then
+        printf '%s\tWARN\tCPU throttled %s more times, %s in total\n' \
+            "${timestamp}" "${throttle_delta}" "${throttle_count}" >> "${event_log}"
+    fi
+
+    if [[ "${swapin_delta}" =~ ^[0-9]+$ ]] &&
+       (( swapin_delta >= warn_swapin_pages )); then
+        printf '%s\tWARN\t%s pages read back from swap in one interval\n' \
+            "${timestamp}" "${swapin_delta}" >> "${event_log}"
     fi
 
     if [[ "${cpu_temp}" != "NA" ]] && (( cpu_temp >= 90000 )); then
@@ -386,9 +475,20 @@ sample_is_elevated() {
     local memory_pressure_full="$6"
     local io_pressure_full="$7"
     local dstate_count="$8"
+    local throttle_delta="$9"
+    local swapin_delta="${10}"
 
     if [[ "${dstate_count}" =~ ^[0-9]+$ ]] &&
        (( dstate_count >= elevated_dstate_count )); then
+        return 0
+    fi
+
+    if [[ "${throttle_delta}" =~ ^[0-9]+$ ]] && (( throttle_delta > 0 )); then
+        return 0
+    fi
+
+    if [[ "${swapin_delta}" =~ ^[0-9]+$ ]] &&
+       (( swapin_delta >= elevated_swapin_pages )); then
         return 0
     fi
 
@@ -472,7 +572,7 @@ report_previous_session() {
 write_log_headers() {
     # New columns are appended, never inserted. The dashboard reads these files
     # by position, so a file written by an older version has to keep parsing.
-    printf 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\tcpu_psi_full_avg10\tmemory_psi_full_avg10\tio_psi_full_avg10\tdstate_count\n' > "${metrics_log}"
+    printf 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\tcpu_psi_full_avg10\tmemory_psi_full_avg10\tio_psi_full_avg10\tdstate_count\tcpu_throttle_count\tswapin_pages\tswapout_pages\tmajfault_count\tdisk_in_flight\tdisk_busy_ms\ttop_memory_processes\n' > "${metrics_log}"
     printf 'timestamp\tepoch\tcontainer\tis_tracked_project\tcpu_pct\tmemory_usage\ttasks\tprocesses\tzombies\toom_killed\trestart_count\n' > "${docker_log}"
 }
 
@@ -516,6 +616,10 @@ on_signal() {
 
 trap on_exit EXIT
 trap on_signal INT TERM
+
+# Resolved once: the root filesystem does not move while the collector runs.
+root_disk="$(resolve_root_disk)"
+readonly root_disk
 
 write_log_headers
 start_timestamp="$(date --iso-8601=seconds)"
@@ -601,6 +705,25 @@ while true; do
     dstate_count="$(read_dstate_count)"
     dstate_count="${dstate_count:-NA}"
 
+    throttle_count="$(read_throttle_count)"
+    swapin_total="$(read_vmstat_value pswpin)"
+    swapout_total="$(read_vmstat_value pswpout)"
+    majfault_total="$(read_vmstat_value pgmajfault)"
+    read -r disk_in_flight busy_ms_total < <(read_disk_stats)
+
+    # Counters are cumulative, so the sample carries the change since the last
+    # one. The first sample of a session has nothing to compare against.
+    swapin_delta="$(delta_since "${swapin_total}" "${previous_swapin}")"
+    swapout_delta="$(delta_since "${swapout_total}" "${previous_swapout}")"
+    majfault_delta="$(delta_since "${majfault_total}" "${previous_majfault}")"
+    disk_busy_delta="$(delta_since "${busy_ms_total}" "${previous_busy_ms}")"
+    throttle_delta="$(delta_since "${throttle_count}" "${previous_throttle}")"
+    previous_swapin="${swapin_total}"
+    previous_swapout="${swapout_total}"
+    previous_majfault="${majfault_total}"
+    previous_busy_ms="${busy_ms_total}"
+    previous_throttle="${throttle_count}"
+
     top_processes="$(
         "${ps_bin}" -eo comm=,%cpu=,%mem= --sort=-%cpu 2>/dev/null |
             head -5 |
@@ -617,6 +740,24 @@ while true; do
     )"
     top_processes="${top_processes//$'\t'/ }"
 
+    # Ranked by memory as well, because the process that exhausted the machine
+    # is rarely the one burning CPU at the moment it gives up.
+    top_memory_processes="$(
+        "${ps_bin}" -eo comm=,%cpu=,%mem= --sort=-%mem 2>/dev/null |
+            head -5 |
+            awk '
+                {
+                    gsub(/[[:space:]]+/, " ", $0)
+                    sub(/^ /, "", $0)
+                    if (NR > 1) {
+                        printf ";"
+                    }
+                    printf "%s", $0
+                }
+            '
+    )"
+    top_memory_processes="${top_memory_processes//$'\t'/ }"
+
     if (( sample_count % docker_every_samples == 0 )); then
         record_docker_sample "${timestamp}" "${epoch}"
     fi
@@ -628,7 +769,7 @@ while true; do
         kernel_cursor="$(read_kernel_cursor)"
     fi
 
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "${timestamp}" "${epoch}" "${uptime_seconds}" \
         "${load1}" "${load5}" "${load15}" \
         "${mem_available_kib}" "${swap_used_kib}" "${root_used_pct}" \
@@ -639,17 +780,22 @@ while true; do
         "${tracked_process_count}" "${tracked_zombie_count}" \
         "${top_processes}" \
         "${cpu_pressure_full}" "${memory_pressure_full}" "${io_pressure_full}" \
-        "${dstate_count}" >> "${metrics_log}"
+        "${dstate_count}" "${throttle_count}" \
+        "${swapin_delta}" "${swapout_delta}" "${majfault_delta}" \
+        "${disk_in_flight}" "${disk_busy_delta}" \
+        "${top_memory_processes}" >> "${metrics_log}"
 
     record_event_if_needed \
         "${timestamp}" "${cpu_temp}" "${gpu_temp}" \
         "${mem_available_kib}" "${io_pressure}" \
-        "${memory_pressure_full}" "${io_pressure_full}" "${dstate_count}"
+        "${memory_pressure_full}" "${io_pressure_full}" "${dstate_count}" \
+        "${throttle_delta}" "${throttle_count}" "${swapin_delta}"
 
     if ((stalled == 1)) || ((kernel_alert_seen == 1)) || sample_is_elevated \
         "${cpu_temp}" "${gpu_temp}" "${mem_available_kib}" \
         "${memory_pressure}" "${io_pressure}" \
-        "${memory_pressure_full}" "${io_pressure_full}" "${dstate_count}"; then
+        "${memory_pressure_full}" "${io_pressure_full}" "${dstate_count}" \
+        "${throttle_delta}" "${swapin_delta}"; then
         if ((write_through == 0)); then
             write_through=1
             printf '%s\tFLUSH\tconditions elevated, writing every sample through\n' \

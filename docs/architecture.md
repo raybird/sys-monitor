@@ -91,6 +91,23 @@ Processes in uninterruptible sleep are counted for the same reason. That state
 is where a task waits on a device, so a pile-up points at storage rather than
 at the CPU, and it raises the load average without consuming any CPU at all.
 
+Several readings are cumulative counters that only mean something as a rate,
+so the sample carries the change since the previous one: swap pages in and
+out, major faults, and the disk's busy milliseconds. The first sample of a
+session has nothing to subtract from and records those as missing.
+
+The CPU throttle count is kept as an absolute, because what matters is whether
+it moved at all. A temperature says the part was hot; the counter says the
+firmware responded by taking speed away. It is absent on hardware without
+Intel's `thermal_throttle` interface, which reads as missing rather than zero.
+
+Disk figures come from the whole device holding the root filesystem, resolved
+once at startup by walking from the mounted partition to its parent in sysfs.
+A root on LVM or device-mapper does not resolve that way and reads as missing.
+
+NVMe error counters are deliberately absent: reading them needs root, and the
+kernel log already carries the controller timeouts and resets that matter.
+
 ## Compatibility
 
 The first private deployment used `runtelenexus_*` field names. The public

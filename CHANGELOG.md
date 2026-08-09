@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.7.0 - 2026-08-09
+
+- Record the CPU throttle count. A temperature says the part was hot; this says
+  the firmware took speed away, which is what the machine actually feels. Any
+  increase raises a warning, because throttling is not a threshold to cross.
+- Record swap traffic and major faults as the change since the previous sample.
+  A swap total says how much was ever paged out; the rate says whether the
+  machine is thrashing right now.
+- Record the queue depth and busy time of the disk holding the root filesystem.
+  A device saturated for whole seconds at a time looks exactly like a freeze.
+- Rank processes by memory as well as by CPU. The process that exhausted the
+  machine is rarely the one burning CPU at the moment it gives up.
+- Show all of it in the dashboard: throttling beside the temperature that
+  caused it, swap-in beside the memory figure, disk queue and busy share beside
+  the filesystem.
+
+NVMe error counters are not included. They need root, and the kernel log
+already carries the controller timeouts that matter.
+
 ## 0.6.0 - 2026-08-09
 
 - Record the `full` pressure figures alongside `some`. "Some" means at least
