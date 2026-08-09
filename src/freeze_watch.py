@@ -423,6 +423,24 @@ class StatusNotifierItem(dbus.service.Object):
         )
 
 
+def container_signature(rows: list[dict[str, str]]) -> tuple:
+    """Everything a container row renders, and nothing else.
+
+    Emptying a list shrinks the scrolled content, which clamps the scroll
+    position, and refilling it does not put the position back. Comparing this
+    against the previous refresh is what keeps an unchanged list untouched.
+    """
+    return tuple(
+        (
+            row.get("container"),
+            row.get("cpu_pct"),
+            row.get("memory_usage"),
+            row.get("zombies"),
+        )
+        for row in rows
+    )
+
+
 def stall_positions(rows: list[dict[str, str]], factor: int = 3) -> list[int]:
     """Indices where sampling fell behind, derived from the samples themselves.
 
@@ -532,6 +550,9 @@ class FreezeWatch(Gtk.Application):
         self.window: Gtk.ApplicationWindow | None = None
         self.incident_bar: Gtk.Box | None = None
         self.incident_dropdown: Gtk.DropDown | None = None
+        self.scroll: Gtk.ScrolledWindow | None = None
+        self.container_signature: tuple | None = None
+        self.event_signature: tuple | None = None
         self.incidents: list[Incident] = []
         self.incident_signature: tuple[str, ...] = ()
         self.selected_incident: Incident | None = None
@@ -662,6 +683,7 @@ class FreezeWatch(Gtk.Application):
         content.set_valign(Gtk.Align.START)
         content.set_vexpand(False)
         scroll.set_child(content)
+        self.scroll = scroll
         root.append(scroll)
         self.window.set_child(root)
 
@@ -1044,17 +1066,52 @@ class FreezeWatch(Gtk.Application):
         current_containers = [
             row for row in docker_rows if row.get("timestamp") == last_timestamp
         ]
-        if self.container_list is not None:
-            self._clear_list(self.container_list)
-            for row in current_containers:
-                self._append_container_row(row)
+        # Emptying a list shrinks the content, which clamps the scroll position
+        # to the smaller extent; refilling it does not put the position back.
+        # Refreshing every two seconds therefore walked the view up the page
+        # whenever anyone scrolled down. Rebuild only on a real change, and put
+        # the position back once the new contents have been laid out.
+        events = self._recent_events()
+        containers = container_signature(current_containers)
+        event_signature = tuple(events)
 
-        if self.event_list is not None:
-            self._clear_list(self.event_list)
-            for event in self._recent_events():
-                self._append_event_row(event)
+        rebuild_containers = (
+            self.container_list is not None
+            and containers != self.container_signature
+        )
+        rebuild_events = (
+            self.event_list is not None and event_signature != self.event_signature
+        )
+
+        if rebuild_containers or rebuild_events:
+            adjustment = self.scroll.get_vadjustment() if self.scroll else None
+            position = adjustment.get_value() if adjustment is not None else 0.0
+
+            if rebuild_containers:
+                self.container_signature = containers
+                self._clear_list(self.container_list)
+                for row in current_containers:
+                    self._append_container_row(row)
+
+            if rebuild_events:
+                self.event_signature = event_signature
+                self._clear_list(self.event_list)
+                for event in events:
+                    self._append_event_row(event)
+
+            if adjustment is not None and position > 0:
+                GLib.idle_add(self._restore_scroll, adjustment, position)
 
         return True
+
+    @staticmethod
+    def _restore_scroll(adjustment: Gtk.Adjustment, position: float) -> bool:
+        # Runs from the idle queue, after the rebuilt contents have been laid
+        # out. Setting the value any earlier would clamp it against the extent
+        # of the emptied list, which is the very thing being undone.
+        # Gtk.Adjustment clamps to the valid range itself.
+        adjustment.set_value(position)
+        return False
 
     @staticmethod
     def _temperature_from_metric(row: dict[str, str], key: str) -> float | None:

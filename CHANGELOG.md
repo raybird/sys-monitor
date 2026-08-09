@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.7.1 - 2026-08-09
+
+- Stop the dashboard dragging the view back up the page. Emptying a list to
+  refill it shrinks the scrolled content, which clamps the scroll position, and
+  refilling does not put it back, so every two-second refresh walked the page
+  upwards for anyone who had scrolled down. Lists are now rebuilt only when
+  their contents actually changed, and the position is restored once the new
+  contents have been laid out.
+
 ## 0.7.0 - 2026-08-09
 
 - Record the CPU throttle count. A temperature says the part was hot; this says

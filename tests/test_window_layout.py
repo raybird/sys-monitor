@@ -101,6 +101,77 @@ class RowWidthTests(unittest.TestCase):
         )
 
 
+@unittest.skipUnless(HAS_DISPLAY, "no display available")
+class ScrollRestoreTests(unittest.TestCase):
+    """Refreshing must not walk the view back up the page.
+
+    Emptying a list shrinks the scrolled content, which clamps the scroll
+    position to the smaller extent, and refilling it does not put the position
+    back. Refreshing every two seconds therefore dragged the view upwards
+    whenever anyone had scrolled down.
+    """
+
+    def setUp(self) -> None:
+        Gtk.init()
+
+    @staticmethod
+    def adjustment(value: float, upper: float, page: float):
+        return Gtk.Adjustment(
+            value=value, lower=0, upper=upper, page_size=page
+        )
+
+    def test_puts_the_position_back(self) -> None:
+        adjustment = self.adjustment(200, 1000, 400)
+        freeze_watch.FreezeWatch._restore_scroll(adjustment, 500)
+        self.assertEqual(adjustment.get_value(), 500)
+
+    def test_stops_running_after_one_pass(self) -> None:
+        adjustment = self.adjustment(0, 1000, 400)
+        self.assertIs(
+            freeze_watch.FreezeWatch._restore_scroll(adjustment, 100), False
+        )
+
+
+class ContainerSignatureTests(unittest.TestCase):
+    """Deciding whether a rebuild is needed at all needs no display."""
+
+    @staticmethod
+    def row(name: str, cpu: str = "0.00%", memory: str = "1MiB") -> dict[str, str]:
+        return {
+            "container": name,
+            "cpu_pct": cpu,
+            "memory_usage": memory,
+            "zombies": "0",
+            "timestamp": "ignored",
+        }
+
+    def test_identical_rows_compare_equal(self) -> None:
+        self.assertEqual(
+            freeze_watch.container_signature([self.row("a"), self.row("b")]),
+            freeze_watch.container_signature([self.row("a"), self.row("b")]),
+        )
+
+    def test_a_changed_reading_differs(self) -> None:
+        self.assertNotEqual(
+            freeze_watch.container_signature([self.row("a")]),
+            freeze_watch.container_signature([self.row("a", cpu="9.90%")]),
+        )
+
+    def test_order_matters(self) -> None:
+        self.assertNotEqual(
+            freeze_watch.container_signature([self.row("a"), self.row("b")]),
+            freeze_watch.container_signature([self.row("b"), self.row("a")]),
+        )
+
+    def test_a_field_that_is_not_rendered_is_ignored(self) -> None:
+        noisy = self.row("a")
+        noisy["timestamp"] = "changes every sample"
+        self.assertEqual(
+            freeze_watch.container_signature([self.row("a")]),
+            freeze_watch.container_signature([noisy]),
+        )
+
+
 class ClampTests(unittest.TestCase):
     """Pure sizing arithmetic, so it needs no display."""
 
