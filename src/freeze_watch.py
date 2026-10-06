@@ -593,7 +593,15 @@ class FreezeWatch(Gtk.Application):
                                 padding: 6px 10px; min-width: 190px; }
             dropdown > button:hover { background: #23313a; }
             dropdown > button label { color: #e6eef2; }
-            dropdown popover contents { background: #151d23; color: #e6eef2; }
+            dropdown popover contents { background: #151d23;
+                                        background-image: none; color: #e6eef2; }
+            dropdown popover listview { background: #151d23; color: #e6eef2; }
+            dropdown popover row { background: #151d23; background-image: none;
+                                   color: #e6eef2; }
+            dropdown popover row:hover { background: #263b47; }
+            dropdown popover row:selected { background: #304d5c; }
+            dropdown popover row label,
+            dropdown popover row image { color: #e6eef2; }
             .hero-value { font-size: 42px; font-weight: 700; letter-spacing: -1px; }
             .hero-title { font-size: 19px; font-weight: 700; }
             .muted { color: #9badb7; font-size: 12px; }
