@@ -1,0 +1,51 @@
+{
+  "0": {
+    "samples": [
+      {
+        "wall_ms": 76.583,
+        "cpu_ms": 86.988,
+        "metrics_bytes": 819
+      },
+      {
+        "wall_ms": 77.673,
+        "cpu_ms": 88.635,
+        "metrics_bytes": 819
+      },
+      {
+        "wall_ms": 75.659,
+        "cpu_ms": 86.192,
+        "metrics_bytes": 817
+      }
+    ],
+    "median_wall_ms": 76.583,
+    "median_cpu_ms": 86.988
+  },
+  "1": {
+    "samples": [
+      {
+        "wall_ms": 131.713,
+        "cpu_ms": 142.798,
+        "metrics_bytes": 876
+      },
+      {
+        "wall_ms": 123.938,
+        "cpu_ms": 135.115,
+        "metrics_bytes": 876
+      },
+      {
+        "wall_ms": 119.089,
+        "cpu_ms": 130.281,
+        "metrics_bytes": 876
+      }
+    ],
+    "median_wall_ms": 123.938,
+    "median_cpu_ms": 135.115
+  },
+  "hardware": {
+    "status": "partial",
+    "unavailable": 1,
+    "truncated": false,
+    "visible_clients": 0
+  },
+  "date": "2026-10-07"
+}

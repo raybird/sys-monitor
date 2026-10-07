@@ -32,7 +32,7 @@ python_bin="$("${repo_dir}/install.sh" --print-python)"
 readonly python_bin
 printf 'Using interpreter: %s\n' "${python_bin}"
 
-"${python_bin}" -m py_compile "${repo_dir}/src/freeze_watch.py"
+"${python_bin}" -m py_compile "${repo_dir}/src/freeze_watch.py" "${repo_dir}/src/freeze_gpu.py"
 "${python_bin}" - <<PY
 from pathlib import Path
 from xml.etree import ElementTree
@@ -81,6 +81,7 @@ test -f "${test_home}/.local/share/applications/com.raybird.FreezeWatch.desktop"
 test -f "${test_home}/.local/share/icons/hicolor/scalable/apps/com.raybird.FreezeWatch.svg"
 test -f "${test_home}/.local/share/icons/hicolor/symbolic/apps/com.raybird.FreezeWatch-symbolic.svg"
 test -f "${test_home}/.local/share/icons/hicolor/symbolic/apps/com.raybird.FreezeWatch-warning-symbolic.svg"
+test -f "${test_home}/.local/share/freeze-watch/freeze_gpu.py"
 grep -qxF "FREEZE_WATCH_COMPOSE_PROJECT=example" "${test_env}"
 grep -qxF "${installed_python_line}" "${test_env}"
 test "$(stat -c '%a' "${test_env}")" = "600"
@@ -113,7 +114,9 @@ fi
 
 # Installing from an extracted tree is the path a curl bootstrap takes once the
 # archive is unpacked, and rerunning must not discard the recorded project.
+printf 'FREEZE_WATCH_GPU_PROCESSES=1\n' >> "${test_env}"
 run_installer --no-start --source "${repo_dir}"
+grep -qxF "FREEZE_WATCH_GPU_PROCESSES=1" "${test_env}"
 grep -qxF "FREEZE_WATCH_COMPOSE_PROJECT=example" "${test_env}"
 grep -qxF "${installed_python_line}" "${test_env}"
 
@@ -203,6 +206,8 @@ HOME="${test_home}" \
 XDG_STATE_HOME="${test_home}/.local/state" \
 FREEZE_WATCH_COMPOSE_PROJECT="" \
 FREEZE_WATCH_MAX_SAMPLES=1 \
+FREEZE_WATCH_GPU_PROCESSES=1 \
+FREEZE_WATCH_PYTHON="${python_bin}" \
     "${test_home}/.local/bin/freeze-monitor"
 
 test -n "$(find "${test_home}/.local/state/freeze-monitor" \
@@ -317,10 +322,18 @@ head -1 "${live_metrics}" | grep -qF 'top_memory_processes'
 
 # Every row has to carry every column. A printf format shorter than its
 # argument list silently wraps and writes a second, mangled line.
-readonly metrics_columns=35
+readonly metrics_columns=36
 test "$(awk -F'\t' 'NR == 1 { print NF }' "${live_metrics}")" = "${metrics_columns}"
 test "$(awk -F'\t' 'NR == 2 { print NF }' "${live_metrics}")" = "${metrics_columns}"
 test "$(awk -F'\t' 'END { print NR }' "${live_metrics}")" = "2"
+"${python_bin}" - "${live_metrics}" <<'PY'
+import csv
+import json
+import sys
+with open(sys.argv[1]) as handle:
+    row = next(csv.DictReader(handle, delimiter="\t"))
+assert "clients" in json.loads(row["gpu_processes"])
+PY
 
 # Synthetic pressure files give "some" and "full" different values, so reading
 # the wrong line cannot pass by looking numeric.
@@ -457,7 +470,7 @@ run_collector() {
 
 seed_previous_session "${test_root}/state-freeze" "00000000-0000-0000-0000-000000000000" ""
 run_collector "${test_root}/state-freeze"
-grep -q $'\tFREEZE\t' "${test_root}/state-freeze/freeze-monitor/events.log"
+grep -q $'\tUNCLEAN\t' "${test_root}/state-freeze/freeze-monitor/events.log"
 grep -q 'last_sample=2026-08-09T10:00:10+08:00' \
     "${test_root}/state-freeze/freeze-monitor/events.log"
 
@@ -468,7 +481,7 @@ grep -q $'\tINTERRUPTED\t' \
 
 seed_previous_session "${test_root}/state-clean" "00000000-0000-0000-0000-000000000000" "STOP"
 run_collector "${test_root}/state-clean"
-if grep -qE $'\t(FREEZE|INTERRUPTED)\t' \
+if grep -qE $'\t(UNCLEAN|FREEZE|INTERRUPTED)\t' \
     "${test_root}/state-clean/freeze-monitor/events.log"; then
     printf 'a clean shutdown was reported as a freeze\n' >&2
     exit 1

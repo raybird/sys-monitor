@@ -1,0 +1,105 @@
+from __future__ import annotations
+
+import importlib.util
+import tempfile
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SPEC = importlib.util.spec_from_file_location("gpu_sample", ROOT / "src/freeze_gpu.py")
+gpu = importlib.util.module_from_spec(SPEC)
+if (ROOT / "src/freeze_gpu.py").exists():
+    SPEC.loader.exec_module(gpu)
+
+
+class GpuSampleTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.proc = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def client(self, pid=123, fd=4, busy=100, start=50, extra="", client=7):
+        root = self.proc / str(pid)
+        (root / "fd").mkdir(parents=True, exist_ok=True)
+        (root / "fdinfo").mkdir(exist_ok=True)
+        (root / "stat").write_text(f"{pid} (gpu owner) S " + "0 " * 18 + str(start))
+        (root / "comm").write_text("gpu-owner\n")
+        link = root / "fd" / str(fd)
+        if not link.is_symlink():
+            link.symlink_to("/dev/dri/renderD128")
+        (root / "fdinfo" / str(fd)).write_text(
+            f"drm-driver: amdgpu\ndrm-pdev: 0000:01:00.0\ndrm-client-id: {client}\n"
+            f"drm-engine-render: {busy} ns\n" + extra)
+
+    def test_scn005_holder_baseline_then_active_delta_and_idle(self):
+        self.client(busy=100)
+        report, previous = gpu.sample_gpu(self.proc, {}, 1000)
+        self.assertEqual(report["clients"][0]["engines"]["render"]["state"], "baseline")
+        self.client(busy=600)
+        report, previous = gpu.sample_gpu(self.proc, previous, 2000)
+        self.assertEqual(report["clients"][0]["engines"]["render"]["busy_ns"], 500)
+        self.assertEqual(report["clients"][0]["engines"]["render"]["pct"], 50.0)
+        report, _ = gpu.sample_gpu(self.proc, previous, 3000)
+        self.assertEqual(report["clients"][0]["engines"]["render"]["busy_ns"], 0)
+
+    def test_scn005_shared_and_duplicate_descriptors_are_not_double_counted(self):
+        self.client(fd=4)
+        self.client(fd=5)
+        self.client(pid=456)
+        report, _ = gpu.sample_gpu(self.proc, {}, 1000)
+        self.assertEqual(len(report["clients"]), 1)
+        self.assertEqual(report["clients"][0]["pids"], [123, 456])
+
+    def test_scn005_regressed_counter_holds_baseline_until_catch_up(self):
+        self.client(busy=100)
+        _, previous = gpu.sample_gpu(self.proc, {}, 1000)
+        self.client(busy=50)
+        report, previous = gpu.sample_gpu(self.proc, previous, 2000)
+        self.assertEqual(report["clients"][0]["engines"]["render"]["state"], "counter_regressed")
+        self.client(busy=150)
+        report, _ = gpu.sample_gpu(self.proc, previous, 3000)
+        self.assertEqual(report["clients"][0]["engines"]["render"]["busy_ns"], 50)
+
+    def test_scn005_reused_pid_is_a_new_baseline(self):
+        self.client(busy=100, start=50)
+        _, previous = gpu.sample_gpu(self.proc, {}, 1000)
+        self.client(busy=600, start=60)
+        report, _ = gpu.sample_gpu(self.proc, previous, 2000)
+        self.assertEqual(report["clients"][0]["engines"]["render"]["state"], "baseline")
+
+    def test_scn005_missing_counters_exited_fd_and_capacity(self):
+        self.client(extra="drm-engine-capacity-render: 2\n")
+        _, previous = gpu.sample_gpu(self.proc, {}, 1000)
+        self.client(busy=600, extra="drm-engine-capacity-render: 2\n")
+        report, _ = gpu.sample_gpu(self.proc, previous, 2000)
+        self.assertEqual(report["clients"][0]["engines"]["render"]["pct"], 25.0)
+        (self.proc / "123/fdinfo/4").write_text("drm-driver: amdgpu\ndrm-client-id: 7\n")
+        report, _ = gpu.sample_gpu(self.proc, {}, 3000)
+        self.assertEqual(report["clients"][0]["state"], "unsupported_counters")
+        (self.proc / "123/fdinfo/4").unlink()
+        report, _ = gpu.sample_gpu(self.proc, {}, 4000)
+        self.assertEqual(report["clients"], [])
+        self.assertGreater(report["unavailable"], 0)
+
+    def test_scn005_scan_budget_is_visible(self):
+        self.client()
+        report, _ = gpu.sample_gpu(self.proc, {}, 1000, budget_ns=0)
+        self.assertTrue(report["truncated"])
+
+    def test_scn005_permission_denied_is_partial_and_does_not_raise(self):
+        self.client()
+        path = self.proc / "123/fdinfo/4"
+        path.chmod(0)
+        try:
+            report, _ = gpu.sample_gpu(self.proc, {}, 1000)
+            self.assertEqual(report["status"], "partial")
+            self.assertEqual(report["clients"], [])
+            self.assertEqual(report["unavailable"], 1)
+        finally:
+            path.chmod(0o600)
+
+
+if __name__ == "__main__":
+    unittest.main()

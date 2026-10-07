@@ -348,6 +348,7 @@ install -m 0755 "${source_dir}/src/freeze-watch" "${bin_dir}/freeze-watch"
 install -m 0755 "${source_dir}/src/freeze-watch-session" "${bin_dir}/freeze-watch-session"
 install -m 0755 "${source_dir}/uninstall.sh" "${data_dir}/uninstall.sh"
 install -m 0644 "${source_dir}/src/freeze_watch.py" "${data_dir}/freeze_watch.py"
+install -m 0644 "${source_dir}/src/freeze_gpu.py" "${data_dir}/freeze_gpu.py"
 install -m 0644 \
     "${source_dir}/packaging/com.raybird.FreezeWatch.desktop" \
     "${applications_dir}/com.raybird.FreezeWatch.desktop"
@@ -391,6 +392,7 @@ umask 077
     printf '# Written by the Freeze Watch installer. Safe to edit.\n'
     printf 'FREEZE_WATCH_PYTHON=%s\n' "${python_bin}"
     printf 'FREEZE_WATCH_COMPOSE_PROJECT=%s\n' "${compose_project}"
+    printf 'FREEZE_WATCH_GPU_PROCESSES=%s\n' "$(env_value FREEZE_WATCH_GPU_PROCESSES)"
 } > "${env_file}.new"
 chmod 0600 "${env_file}.new"
 mv -f "${env_file}.new" "${env_file}"

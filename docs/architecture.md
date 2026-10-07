@@ -41,11 +41,14 @@ No daemon runs as root.
 
 The collector is read after the fact, so it has to say where an incident was.
 
-Each session writes `START` on entry and `STOP` on a clean exit. A session that
-never wrote `STOP` was cut off, and the next session says so: `FREEZE` when the
-boot id changed, meaning the machine went down without shutting down, and
-`INTERRUPTED` when it did not, meaning only the collector died. Both name the
-last sample that reached disk.
+截至 2026-10-05，每個 session 以 `START`／`STOP` 區分正常停止。缺少
+`STOP` 且 boot id 改變時記為 `UNCLEAN`：只能確認非正常關機，無法區分
+斷電、強制重啟或當機；同 boot 則記為 `INTERRUPTED`。歷史 `FREEZE`
+仍可回顧，但 UI 一律保留「疑似當機、原因未確認」的措辭。
+
+截至 2026-10-05，前次 session 的取樣定位追蹤 `START` 後的所有 `ROTATE`，
+從最新有效取樣檔向前回退，不借用其他 session 的資料。回顧以 `last_sample`
+為窗口終點，涵蓋同 session 的輪替檔；沒有有效取樣時明示缺資料。
 
 `GAP` records a sample that arrived later than three intervals. It answers a
 question the metrics cannot: if samples kept arriving through a reported
@@ -107,6 +110,27 @@ A root on LVM or device-mapper does not resolve that way and reads as missing.
 
 NVMe error counters are deliberately absent: reading them needs root, and the
 kernel log already carries the controller timeouts and resets that matter.
+
+## GPU 程序紀錄與安全匯出
+
+截至 2026-10-05，設定 `FREEZE_WATCH_GPU_PROCESSES=1` 可啟用 `freeze_gpu.py`。
+資料附加於 metrics TSV 最後的 `gpu_processes` JSON 欄位，預設為 `disabled`。
+採樣讀 `/proc/PID/fd` 與 fdinfo；僅讀 comm，不讀 cmdline。依裝置與
+DRM client-id 去重，使用程序啟動身份辨識 PID 重用；累積引擎 ns 轉為差值，
+首次／缺計數器／計數器回退時不冒充零活動，並依引擎 capacity 換算占比。
+契約依 [Linux 核心文件](https://docs.kernel.org/gpu/drm-usage-stats.html)。
+
+截至 2026-10-05，單次掃描上限為 512 個程序、每程序 64 個 fd、總計 2048 個 fd、
+16 個 client、每 client 4 個持有者與 8 個引擎；掃描預算 100 ms，外層逾時為 1 秒。
+受限時記錄 truncated／partial；無權限或不支援的驅動不影響基本監測。
+私有 gpu-counters.json 保存差值基線，收集器重新啟動時重設 session 身份。
+
+截至 2026-10-05，診斷報告為事件前 30 分鐘／後 5 分鐘的純文字預覽，
+儲存使用與預覽相同的固定文本，權限 0600。數值以允許欄位輸出，省略檔案路徑、
+程序名稱與參數；核心訊息僅保留錯誤分類，原始內容仍留於本機 events.log。
+非正常關機的前次核心證據可能由新 session 讀回，報告標示其讀回時間。
+
+最後驗證日期：2026-10-05。
 
 ## Compatibility
 

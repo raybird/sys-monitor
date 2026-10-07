@@ -42,6 +42,12 @@ readonly kernel_alerts_per_scan=3
 readonly kernel_alert_pattern='hung_task|blocked for more than [0-9]+ seconds|detected stalls? on CPU|INFO: rcu|soft lockup|hard LOCKUP|Kernel panic|BUG: unable to handle|general protection fault|GPU HANG|GPU hang|GPU reset|\[drm[^]]*\].*(reset|hang|timeout|ERROR)|ring [a-z0-9_.]+ timeout|NVRM: Xid|nvme.*(timeout|controller is down|resetting)|mce: \[Hardware Error\]|[Mm]achine check events logged|Out of memory: Kill|oom-kill:|above threshold, cpu clock throttled|EXT4-fs error|Buffer I/O error|ata[0-9]+\.[0-9]+: failed command'
 readonly compose_project="${FREEZE_WATCH_COMPOSE_PROJECT:-}"
 readonly max_samples="${FREEZE_WATCH_MAX_SAMPLES:-0}"
+readonly gpu_processes_enabled="${FREEZE_WATCH_GPU_PROCESSES:-0}"
+gpu_sampler="${BASH_SOURCE[0]%/*}/freeze_gpu.py"
+if [[ ! -f "${gpu_sampler}" ]]; then
+    gpu_sampler="${XDG_DATA_HOME:-${HOME}/.local/share}/freeze-watch/freeze_gpu.py"
+fi
+readonly gpu_sampler
 readonly state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/freeze-monitor"
 readonly event_log="${state_dir}/events.log"
 
@@ -523,7 +529,7 @@ sample_is_elevated() {
 report_previous_session() {
     local timestamp="$1"
     local now_epoch="$2"
-    local last_record previous_type previous_boot previous_metrics
+    local last_record previous_type previous_boot previous_metrics="" candidate
     local last_sample="" last_epoch="" silence=""
 
     [[ -r "${event_log}" ]] || return 0
@@ -538,16 +544,28 @@ report_previous_session() {
     [[ "${previous_type}" == "START" ]] || return 0
 
     previous_boot="$(printf '%s' "${last_record}" | sed -n 's/.*boot=\([^ ]*\).*/\1/p')"
-    previous_metrics="$(printf '%s' "${last_record}" | sed -n 's/.*metrics=\([^ ]*\).*/\1/p')"
-
-    if [[ -n "${previous_metrics}" && -r "${previous_metrics}" ]]; then
+    while IFS= read -r candidate; do
+        candidate="$(printf '%s' "${candidate}" | sed -n 's/.*metrics=\([^ ]*\).*/\1/p')"
+        [[ -n "${candidate}" && -r "${candidate}" ]] || continue
         read -r last_sample last_epoch < <(
             awk -F'\t' '
-                NR > 1 && NF > 2 { stamp = $1; stamp_epoch = $2 }
+                NR > 1 && NF > 2 && $2 ~ /^[0-9]+$/ && $1 ~ /^[0-9]+-/ {
+                    stamp = $1; stamp_epoch = $2
+                }
                 END { print stamp, stamp_epoch }
-            ' "${previous_metrics}"
+            ' "${candidate}"
         )
-    fi
+        if [[ -n "${last_epoch}" ]]; then
+            previous_metrics="${candidate}"
+            break
+        fi
+    done < <(
+        awk -F'\t' '
+            $2 == "START" || $2 == "STOP" { count = 0 }
+            $2 == "START" || $2 == "ROTATE" { files[++count] = $3 }
+            END { for (i = count; i > 0; i--) print files[i] }
+        ' "${event_log}"
+    )
 
     last_sample="${last_sample:-unknown}"
     # A clock that stepped backwards, over NTP or across an RTC the firmware
@@ -560,7 +578,7 @@ report_previous_session() {
         # Only an unclean reboot justifies reading the previous boot's kernel
         # log. Doing it on every restart would replay the same lines forever.
         scan_previous_boot=1
-        printf '%s\tFREEZE\tprevious session ended without shutting down; last_sample=%s%s metrics=%s\n' \
+        printf '%s\tUNCLEAN\tprevious session ended without STOP; boot_changed=yes cause=unknown (power loss, forced reboot or freeze); last_sample=%s%s metrics=%s\n' \
             "${timestamp}" "${last_sample}" "${silence}" \
             "${previous_metrics:-unknown}" >> "${event_log}"
     else
@@ -572,7 +590,7 @@ report_previous_session() {
 write_log_headers() {
     # New columns are appended, never inserted. The dashboard reads these files
     # by position, so a file written by an older version has to keep parsing.
-    printf 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\tcpu_psi_full_avg10\tmemory_psi_full_avg10\tio_psi_full_avg10\tdstate_count\tcpu_throttle_count\tswapin_pages\tswapout_pages\tmajfault_count\tdisk_in_flight\tdisk_busy_ms\ttop_memory_processes\n' > "${metrics_log}"
+    printf 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\tcpu_psi_full_avg10\tmemory_psi_full_avg10\tio_psi_full_avg10\tdstate_count\tcpu_throttle_count\tswapin_pages\tswapout_pages\tmajfault_count\tdisk_in_flight\tdisk_busy_ms\ttop_memory_processes\tgpu_processes\n' > "${metrics_log}"
     printf 'timestamp\tepoch\tcontainer\tis_tracked_project\tcpu_pct\tmemory_usage\ttasks\tprocesses\tzombies\toom_killed\trestart_count\n' > "${docker_log}"
 }
 
@@ -687,6 +705,14 @@ while true; do
     gpu_temp="$(read_hwmon_temp "${gpu_temp_sensors[@]}")"
     nvme_temp="$(read_hwmon_temp nvme)"
     gpu_busy="$(read_gpu_busy)"
+    gpu_processes="disabled"
+    if [[ "${gpu_processes_enabled}" == "1" ]]; then
+        gpu_processes="$(
+            timeout 1 "${FREEZE_WATCH_PYTHON:-/usr/bin/python3}" "${gpu_sampler}" \
+                --state "${state_dir}/gpu-counters.json" --session "${boot_id}:$$" \
+                --proc-root "${FREEZE_WATCH_GPU_PROC_ROOT:-/proc}" 2>/dev/null
+        )" || gpu_processes='{"status":"unavailable","clients":[]}'
+    fi
 
     cpu_pressure="$(read_pressure_avg10 "${pressure_root}/cpu")"
     memory_pressure="$(read_pressure_avg10 "${pressure_root}/memory")"
@@ -769,7 +795,7 @@ while true; do
         kernel_cursor="$(read_kernel_cursor)"
     fi
 
-    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
+    printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
         "${timestamp}" "${epoch}" "${uptime_seconds}" \
         "${load1}" "${load5}" "${load15}" \
         "${mem_available_kib}" "${swap_used_kib}" "${root_used_pct}" \
@@ -783,7 +809,7 @@ while true; do
         "${dstate_count}" "${throttle_count}" \
         "${swapin_delta}" "${swapout_delta}" "${majfault_delta}" \
         "${disk_in_flight}" "${disk_busy_delta}" \
-        "${top_memory_processes}" >> "${metrics_log}"
+        "${top_memory_processes}" "${gpu_processes}" >> "${metrics_log}"
 
     record_event_if_needed \
         "${timestamp}" "${cpu_temp}" "${gpu_temp}" \

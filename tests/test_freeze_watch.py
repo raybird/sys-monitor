@@ -175,6 +175,41 @@ class IncidentTests(unittest.TestCase):
         )
         self.assertIsNone(freeze_watch.docker_path_for(None))
 
+    def test_scn004_old_and_new_unclean_events_use_uncertain_labels(self):
+        for kind in ("FREEZE", "UNCLEAN"):
+            incident = freeze_watch.Incident("2026-10-05T00:00:00+00:00", kind, "", None)
+            self.assertIn("疑似當機", incident.label)
+
+    def test_scn002_review_anchors_on_last_sample_and_crosses_rotation(self):
+        first = self.write_metrics("metrics-first.tsv", 1700000000, 3)
+        second = self.write_metrics("metrics-second.tsv", 1700000030, 3)
+        last = datetime.fromtimestamp(1700000050).isoformat()
+        restart = datetime.fromtimestamp(1700100000).isoformat()
+        self.write_events(
+            f"{last}\tSTART\tboot=old metrics={first}",
+            f"{last}\tROTATE\tmetrics={second}",
+            f"{restart}\tUNCLEAN\tlast_sample={last} metrics={second}",
+        )
+        incidents = freeze_watch.read_incidents()
+        self.assertEqual(len(incidents), 1)
+        rows = freeze_watch.incident_rows(incidents[0])
+        self.assertEqual([int(row["epoch"]) for row in rows],
+                         [1700000000, 1700000010, 1700000020, 1700000030, 1700000040, 1700000050])
+
+    def test_scn006_old_stall_still_has_data_after_the_file_grows(self):
+        metrics = self.write_metrics("metrics-grown.tsv", 1700000000, 40000)
+        stamp = datetime.fromtimestamp(1700001000).isoformat()
+        self.write_events(f"{stamp}\tGAP\tsampling stalled")
+        incident = freeze_watch.read_incidents()[0]
+        self.assertEqual(incident.metrics_path, metrics)
+        rows = freeze_watch.incident_rows(incident)
+        self.assertEqual(int(rows[0]["epoch"]), 1700000000)
+        self.assertEqual(int(rows[-1]["epoch"]), 1700001000)
+        report = freeze_watch.diagnostic_report(incident)
+        self.assertIn("\t50000.0\t", report)
+        self.assertIn("\t63000.0\t", report)
+        self.assertNotIn("\t63100.0\t", report)
+
 
 class StallPositionTests(unittest.TestCase):
     """Stalls are derived from the samples, not from a separate log."""
@@ -310,6 +345,8 @@ class SystemMetricLevelTests(unittest.TestCase):
         summary = freeze_watch.format_incident_summary(freeze_inc)
         self.assertIn("最後取樣 2026-10-22 22:04:49", summary)
         self.assertIn("中斷 30303s", summary)
+        self.assertIn("原因未確認", summary)
+        self.assertNotIn("凍結", summary)
 
 
 if __name__ == "__main__":
