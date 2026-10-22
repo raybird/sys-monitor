@@ -100,6 +100,16 @@ class RowWidthTests(unittest.TestCase):
             self.minimum_width(self.app.container_list), self.BOUNDED_WIDTH
         )
 
+    def test_process_rows_stay_shrinkable(self) -> None:
+        self.app.cpu_process_list = Gtk.ListBox()
+        self.app._populate_process_list(
+            self.app.cpu_process_list,
+            "an-unreasonably-long-process-command-name-that-would-overflow 98.5 14.2",
+        )
+        self.assertLess(
+            self.minimum_width(self.app.cpu_process_list), self.BOUNDED_WIDTH
+        )
+
 
 @unittest.skipUnless(HAS_DISPLAY, "no display available")
 class ScrollRestoreTests(unittest.TestCase):

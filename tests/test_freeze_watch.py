@@ -253,5 +253,64 @@ class HwmonTests(unittest.TestCase):
             )
 
 
+class SystemMetricLevelTests(unittest.TestCase):
+    def test_memory_levels(self) -> None:
+        self.assertEqual(freeze_watch.memory_level(8 * 1024 * 1024, 0), "safe")
+        self.assertEqual(freeze_watch.memory_level(1500 * 1024, 0), "warm")
+        self.assertEqual(freeze_watch.memory_level(800 * 1024, 0), "hot")
+        self.assertEqual(freeze_watch.memory_level(300 * 1024, 0), "danger")
+        self.assertEqual(freeze_watch.memory_level(8 * 1024 * 1024, 12000), "danger")
+
+    def test_load_levels(self) -> None:
+        self.assertEqual(freeze_watch.load_level(1.5, 0, cpu_count=8), "safe")
+        self.assertEqual(freeze_watch.load_level(1.5, 1, cpu_count=8), "warm")
+        self.assertEqual(freeze_watch.load_level(1.5, 4, cpu_count=8), "hot")
+        self.assertEqual(freeze_watch.load_level(1.5, 8, cpu_count=8), "danger")
+        self.assertEqual(freeze_watch.load_level(12.0, 0, cpu_count=8), "hot")
+
+    def test_pressure_levels(self) -> None:
+        self.assertEqual(freeze_watch.pressure_level(0.0, 0.0, 0.0), "safe")
+        self.assertEqual(freeze_watch.pressure_level(6.0, 0.0, 0.0), "warm")
+        self.assertEqual(freeze_watch.pressure_level(22.0, 0.0, 0.0), "hot")
+        self.assertEqual(freeze_watch.pressure_level(5.0, 12.0, 0.0), "danger")
+
+    def test_disk_levels(self) -> None:
+        self.assertEqual(freeze_watch.disk_level(60.0, 0, 100.0, 10), "safe")
+        self.assertEqual(freeze_watch.disk_level(86.0, 0, 100.0, 10), "warm")
+        self.assertEqual(freeze_watch.disk_level(60.0, 0, 8000.0, 10), "hot")
+        self.assertEqual(freeze_watch.disk_level(96.0, 0, 100.0, 10), "danger")
+
+    def test_process_parsing_and_formatting(self) -> None:
+        raw = "opencode 75.1 1.7;Web Content 12.0 4.5"
+        self.assertEqual(
+            freeze_watch.parse_process_entries(raw),
+            [
+                ("opencode", "75.1%", "1.7%"),
+                ("Web Content", "12.0%", "4.5%"),
+            ],
+        )
+        self.assertIn("CPU 75.1%", freeze_watch.format_process_listing(raw))
+        self.assertEqual(freeze_watch.format_process_listing("NA"), "尚無程序資料")
+
+    def test_ribbon_tooltip_and_incident_summary(self) -> None:
+        tooltip = freeze_watch.ribbon_sample_tooltip(
+            {"timestamp": "2026-10-23T07:00:00+08:00", "cpu": 65.0, "gpu": 55.0, "nvme": 42.0},
+            stalled=True,
+        )
+        self.assertIn("2026-10-23 07:00:00", tooltip)
+        self.assertIn("採樣停擺", tooltip)
+        self.assertIn("CPU 65°C", tooltip)
+
+        freeze_inc = freeze_watch.Incident(
+            "2026-10-23T06:29:52+08:00",
+            "FREEZE",
+            "previous session ended without shutting down; last_sample=2026-10-22T22:04:49+08:00 silent_for=30303s metrics=/tmp/m.tsv",
+            None,
+        )
+        summary = freeze_watch.format_incident_summary(freeze_inc)
+        self.assertIn("最後取樣 2026-10-22 22:04:49", summary)
+        self.assertIn("中斷 30303s", summary)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -296,6 +296,191 @@ def level_copy(level: str) -> tuple[str, str]:
     }[level]
 
 
+LEVEL_SEVERITY = {"safe": 0, "warm": 1, "hot": 2, "danger": 3}
+
+CARD_TOOLTIPS = {
+    "cpu": (
+        "處理器封裝溫度與硬體熱節流（Thermal Throttle）累計次數。\n"
+        "若節流次數增加，代表溫度過高導致韌體強制降頻。"
+    ),
+    "gpu": "顯示核心溫度（支援 AMD、Intel 與 Nouveau 感測器）。",
+    "nvme": "NVMe 固態硬碟感測器溫度。",
+    "可用記憶體": (
+        "立即可供應用程式分配的記憶體（MemAvailable）。\n"
+        "• swap：目前已使用的交換空間\n"
+        "• 換入（swap-in）：最近一輪從磁碟讀回記憶體的頁數；"
+        "數值飆高代表系統正因記憶體不足而劇烈抖動（Thrashing）。"
+    ),
+    "負載": (
+        "1 / 5 / 15 分鐘系統平均負載（Load Average）。\n"
+        "• D（Uninterruptible Sleep）：正在等待磁碟或硬體 I/O 回應、無法中斷的程序數。"
+        "若 D 持續偏高，通常是儲存裝置或驅動卡死的前兆。"
+    ),
+    "i/o 壓力": (
+        "Linux PSI（Pressure Stall Information）過去 10 秒受阻時間比例。\n"
+        "• 全停（full）：所有非閒置程序同時因等待資源而停擺的比例，直接對應畫面卡死體感\n"
+        "• CPU / RAM：處理器與記憶體受阻比例（some）"
+    ),
+    "根目錄": (
+        "根目錄（/）磁碟空間使用率與底層裝置繁忙程度。\n"
+        "• 佇列（in-flight）：目前正在排隊等待磁碟處理的 I/O 請求數\n"
+        "• 忙碌（busy）：採樣區間內磁碟實際處於讀寫忙碌的時間佔比"
+    ),
+}
+
+
+def worst_level(*levels: str) -> str:
+    return max(levels, key=lambda item: LEVEL_SEVERITY.get(item, 0), default="safe")
+
+
+def memory_level(available_kib: int | None, swapin_pages: int | None = None) -> str:
+    level = "safe"
+    if available_kib is not None:
+        if available_kib < 512 * 1024:
+            level = "danger"
+        elif available_kib < 1024 * 1024:
+            level = "hot"
+        elif available_kib < 2 * 1024 * 1024:
+            level = "warm"
+    if swapin_pages is not None:
+        if swapin_pages >= 10000:
+            level = worst_level(level, "danger")
+        elif swapin_pages >= 3000:
+            level = worst_level(level, "hot")
+        elif swapin_pages >= 1000:
+            level = worst_level(level, "warm")
+    return level
+
+
+def load_level(
+    load1: float | None,
+    dstate_count: int | None = None,
+    cpu_count: int | None = None,
+) -> str:
+    level = "safe"
+    if dstate_count is not None:
+        if dstate_count >= 8:
+            level = "danger"
+        elif dstate_count >= 4:
+            level = "hot"
+        elif dstate_count >= 1:
+            level = "warm"
+    if load1 is not None:
+        cores = max(cpu_count or os.cpu_count() or 4, 1)
+        if load1 >= cores * 2.5:
+            level = worst_level(level, "danger")
+        elif load1 >= cores * 1.5:
+            level = worst_level(level, "hot")
+        elif load1 >= cores:
+            level = worst_level(level, "warm")
+    return level
+
+
+def pressure_level(
+    io_some: float | None,
+    io_full: float | None = None,
+    mem_full: float | None = None,
+    cpu_some: float | None = None,
+    mem_some: float | None = None,
+) -> str:
+    full_peak = max((v for v in (io_full, mem_full) if v is not None), default=0.0)
+    some_peak = max((v for v in (io_some, mem_some) if v is not None), default=0.0)
+    if full_peak >= 10.0 or some_peak >= 40.0:
+        return "danger"
+    if full_peak >= 3.0 or some_peak >= 20.0:
+        return "hot"
+    if full_peak >= 1.0 or some_peak >= 5.0 or (cpu_some or 0.0) >= 25.0:
+        return "warm"
+    return "safe"
+
+
+def disk_level(
+    used_pct: float | None,
+    in_flight: int | None = None,
+    busy_ms: float | None = None,
+    interval_seconds: int = SAMPLE_INTERVAL_SECONDS,
+) -> str:
+    busy_pct = (
+        busy_ms / (interval_seconds * 1000) * 100
+        if busy_ms is not None and interval_seconds > 0
+        else 0.0
+    )
+    if (used_pct or 0.0) >= 95.0 or busy_pct >= 90.0 or (in_flight or 0) >= 32:
+        return "danger"
+    if (used_pct or 0.0) >= 90.0 or busy_pct >= 75.0 or (in_flight or 0) >= 16:
+        return "hot"
+    if (used_pct or 0.0) >= 85.0 or busy_pct >= 50.0 or (in_flight or 0) >= 4:
+        return "warm"
+    return "safe"
+
+
+def parse_process_entries(raw: str | None) -> list[tuple[str, str, str]]:
+    """Parse semicolon-delimited 'comm %cpu %mem' entries from the collector."""
+    if not raw or raw in ("NA", "—", "尚無程序資料"):
+        return []
+    entries: list[tuple[str, str, str]] = []
+    for item in raw.split(";"):
+        text = item.strip()
+        if not text:
+            continue
+        parts = text.rsplit(None, 2)
+        if len(parts) == 3 and as_float(parts[1]) is not None and as_float(parts[2]) is not None:
+            entries.append((parts[0], f"{parts[1].rstrip('%')}%", f"{parts[2].rstrip('%')}%"))
+        else:
+            entries.append((text, "—", "—"))
+    return entries
+
+
+def format_process_listing(raw: str | None) -> str:
+    entries = parse_process_entries(raw)
+    if not entries:
+        return "尚無程序資料"
+    formatted = []
+    for name, cpu, mem in entries:
+        if cpu == "—" and mem == "—":
+            formatted.append(name)
+        else:
+            formatted.append(f"{name} (CPU {cpu} · RAM {mem})")
+    return "    ·    ".join(formatted)
+
+
+def format_incident_summary(incident: Incident) -> str:
+    """Turn a raw collector incident message into a concise human summary."""
+    message = incident.message
+    if incident.kind == "FREEZE":
+        last_sample = ""
+        silent_for = ""
+        for token in message.split():
+            if token.startswith("last_sample="):
+                last_sample = token.split("=", 1)[1].replace("T", " ")[:19]
+            elif token.startswith("silent_for="):
+                silent_for = token.split("=", 1)[1]
+        details = []
+        if last_sample:
+            details.append(f"最後取樣 {last_sample}")
+        if silent_for:
+            details.append(f"中斷 {silent_for}")
+        if details:
+            return f"系統非正常關機或凍結（{' · '.join(details)}）"
+    if incident.kind == "GAP" and "sampling stalled for" in message:
+        return message.replace("sampling stalled for ", "取樣停擺 ").replace(
+            ", expected ", "（預期 "
+        ) + "）"
+    return message
+
+
+def ribbon_sample_tooltip(sample: dict[str, Any], stalled: bool = False) -> str:
+    raw_ts = str(sample.get("timestamp") or "")
+    moment = raw_ts.replace("T", " ")[:19] if raw_ts else "未知時間"
+    header = f"{moment} · ⚠ 採樣停擺（排程延遲）" if stalled else moment
+    return (
+        f"{header}\n"
+        f"CPU {format_temperature(sample.get('cpu'))}  ·  "
+        f"GPU {format_temperature(sample.get('gpu'))}  ·  "
+        f"NVMe {format_temperature(sample.get('nvme'))}"
+    )
+
+
 class StatusNotifierItem(dbus.service.Object):
     """Minimal SNI implementation, compatible with Ubuntu AppIndicators."""
 
@@ -469,19 +654,27 @@ class ThermalRibbon(Gtk.DrawingArea):
 
     def __init__(self):
         super().__init__()
-        self.history: list[dict[str, float | None]] = []
+        self.history: list[dict[str, Any]] = []
         self.stalls: list[int] = []
+        self.hover_index: int | None = None
         self.set_content_height(76)
         self.set_size_request(-1, 76)
         self.set_hexpand(True)
         self.set_vexpand(False)
         self.set_valign(Gtk.Align.START)
+        self.set_tooltip_text("滑鼠懸停可查看各時間點的感測器溫度與停擺紀錄")
         self.set_draw_func(self._draw)
+
+        motion = Gtk.EventControllerMotion()
+        motion.connect("motion", self._on_motion)
+        motion.connect("leave", self._on_leave)
+        self.add_controller(motion)
 
     def set_history(self, rows: list[dict[str, str]]) -> None:
         visible = rows[-180:]
         self.history = [
             {
+                "timestamp": row.get("timestamp", ""),
                 "cpu": self._from_millidegree(row.get("cpu_temp_mC")),
                 "gpu": self._from_millidegree(row.get("gpu_temp_mC")),
                 "nvme": self._from_millidegree(row.get("nvme_temp_mC")),
@@ -489,7 +682,33 @@ class ThermalRibbon(Gtk.DrawingArea):
             for row in visible
         ]
         self.stalls = stall_positions(visible)
+        if self.hover_index is not None:
+            if 0 <= self.hover_index < len(self.history):
+                self._update_hover_tooltip(self.hover_index)
+            else:
+                self.hover_index = None
         self.queue_draw()
+
+    def _on_motion(self, _controller, x: float, _y: float) -> None:
+        width = self.get_width()
+        if not self.history or width <= 0:
+            return
+        step = max(width / len(self.history), 1)
+        index = max(0, min(int(x / step), len(self.history) - 1))
+        if index != self.hover_index:
+            self.hover_index = index
+            self._update_hover_tooltip(index)
+            self.queue_draw()
+
+    def _on_leave(self, _controller) -> None:
+        if self.hover_index is not None:
+            self.hover_index = None
+            self.set_tooltip_text("滑鼠懸停可查看各時間點的感測器溫度與停擺紀錄")
+            self.queue_draw()
+
+    def _update_hover_tooltip(self, index: int) -> None:
+        sample = self.history[index]
+        self.set_tooltip_text(ribbon_sample_tooltip(sample, index in self.stalls))
 
     @staticmethod
     def _from_millidegree(value: str | None) -> float | None:
@@ -507,6 +726,13 @@ class ThermalRibbon(Gtk.DrawingArea):
         if value >= 70:
             return 0.80, 0.66, 0.20
         return 0.27, 0.70, 0.80
+
+    @staticmethod
+    def _short_time(timestamp: Any) -> str:
+        text = str(timestamp or "")
+        if "T" in text:
+            return text.split("T", 1)[1][:8]
+        return text[:8]
 
     def _draw(self, _area, context, width: int, height: int) -> None:
         context.set_source_rgb(0.055, 0.071, 0.09)
@@ -542,6 +768,23 @@ class ThermalRibbon(Gtk.DrawingArea):
             context.rectangle(max(0, x - 1), 0, 2, height)
             context.fill()
 
+        if self.hover_index is not None and 0 <= self.hover_index < len(self.history):
+            hx = self.hover_index * step
+            context.set_source_rgba(0.92, 0.97, 1.0, 0.85)
+            context.rectangle(max(0, hx), 0, max(step, 2), height)
+            context.fill()
+
+        # Subtle start and end timestamps anchor the 30-minute window.
+        start_time = self._short_time(self.history[0].get("timestamp"))
+        end_time = self._short_time(self.history[-1].get("timestamp"))
+        if start_time and end_time and width >= 180:
+            context.set_font_size(9.5)
+            context.set_source_rgba(0.86, 0.93, 0.96, 0.72)
+            context.move_to(48, height - 6)
+            context.show_text(start_time)
+            context.move_to(max(110, width - 54), height - 6)
+            context.show_text(end_time)
+
 
 class FreezeWatch(Gtk.Application):
     def __init__(self, start_hidden: bool):
@@ -550,9 +793,11 @@ class FreezeWatch(Gtk.Application):
         self.window: Gtk.ApplicationWindow | None = None
         self.incident_bar: Gtk.Box | None = None
         self.incident_dropdown: Gtk.DropDown | None = None
+        self.live_button: Gtk.Button | None = None
         self.scroll: Gtk.ScrolledWindow | None = None
         self.container_signature: tuple | None = None
         self.event_signature: tuple | None = None
+        self.process_signature: tuple | None = None
         self.incidents: list[Incident] = []
         self.incident_signature: tuple[str, ...] = ()
         self.selected_incident: Incident | None = None
@@ -562,6 +807,8 @@ class FreezeWatch(Gtk.Application):
         self.temperature_cards: dict[str, tuple[Gtk.Label, Gtk.Label, Gtk.Widget]] = {}
         self.container_list: Gtk.ListBox | None = None
         self.event_list: Gtk.ListBox | None = None
+        self.cpu_process_list: Gtk.ListBox | None = None
+        self.memory_process_list: Gtk.ListBox | None = None
         self._initial_activation = True
 
     def do_startup(self):
@@ -586,6 +833,7 @@ class FreezeWatch(Gtk.Application):
             .dashboard { padding: 22px 26px 28px; }
             .hero { background: #162129; border: 1px solid #2a424e;
                     border-radius: 14px; padding: 20px 22px; }
+            .hero.reviewing { background: #1f1916; border-color: #8a5628; }
             .eyebrow { color: #77bfce; font-size: 11px; font-weight: 700;
                        letter-spacing: 1.7px; }
             dropdown > button { background: #1b262d; color: #e6eef2;
@@ -607,6 +855,9 @@ class FreezeWatch(Gtk.Application):
             .muted { color: #9badb7; font-size: 12px; }
             .metric-card { background: #151d23; border: 1px solid #28343c;
                            border-radius: 10px; padding: 14px 16px; }
+            .metric-card.warm { border-color: #6b5f35; }
+            .metric-card.hot { border-color: #8a5628; background: #1c1a17; }
+            .metric-card.danger { border-color: #8c3835; background: #1f1618; }
             .metric-key { color: #91a4af; font-size: 11px; font-weight: 700;
                           letter-spacing: 1.2px; }
             .metric-value { color: #e7f0f4; font-size: 25px; font-weight: 700; }
@@ -622,7 +873,10 @@ class FreezeWatch(Gtk.Application):
             .safe { color: #79c4d3; } .warm { color: #d8c568; }
             .hot { color: #f0a046; } .danger { color: #ef6861; }
             .status-pill { font-size: 12px; font-weight: 700; }
-            .button-flat { background: #1d2e37; color: #d9f0f5; border-radius: 7px; }
+            .button-flat { background: #1d2e37; color: #d9f0f5;
+                           border: 1px solid #33505e; border-radius: 8px;
+                           padding: 6px 12px; font-weight: 700; }
+            .button-flat:hover { background: #263d49; }
         """
         provider = Gtk.CssProvider()
         provider.load_from_data(css)
@@ -656,6 +910,9 @@ class FreezeWatch(Gtk.Application):
         card = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
         card.add_css_class("metric-card")
         card.set_hexpand(True)
+        tooltip = CARD_TOOLTIPS.get(key.lower())
+        if tooltip:
+            card.set_tooltip_text(tooltip)
         card.append(self._label(key, "metric-key"))
         value = self._label("—", "metric-value")
         detail_label = self._label(detail, "muted")
@@ -703,12 +960,21 @@ class FreezeWatch(Gtk.Application):
         self.incident_bar.set_visible(False)
         incident_text = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
         incident_text.set_hexpand(True)
-        incident_text.append(self._label("事故回顧", "eyebrow"))
+        self.labels["incident_eyebrow"] = self._label("事故回顧", "eyebrow")
+        incident_text.append(self.labels["incident_eyebrow"])
         self.labels["incident_summary"] = self._label("", "muted", ellipsize=True)
         incident_text.append(self.labels["incident_summary"])
         self.incident_bar.append(incident_text)
+        self.live_button = Gtk.Button(label="返回即時監測")
+        self.live_button.add_css_class("button-flat")
+        self.live_button.set_valign(Gtk.Align.CENTER)
+        self.live_button.set_tooltip_text("結束歷史事故檢視，切回目前即時感測器讀數")
+        self.live_button.set_visible(False)
+        self.live_button.connect("clicked", self._return_to_live)
+        self.incident_bar.append(self.live_button)
         self.incident_dropdown = Gtk.DropDown.new_from_strings(["即時監測"])
         self.incident_dropdown.set_valign(Gtk.Align.CENTER)
+        self.incident_dropdown.set_tooltip_text("選擇過去記錄到的凍結或停擺事件，檢視事發前 30 分鐘的系統狀態")
         self.incident_dropdown.connect("notify::selected", self._on_incident_selected)
         self.incident_bar.append(self.incident_dropdown)
         content.append(self.incident_bar)
@@ -741,8 +1007,13 @@ class FreezeWatch(Gtk.Application):
         hero.append(right)
         content.append(hero)
 
+        ribbon_header = Gtk.Box(spacing=8)
         self.labels["ribbon_title"] = self._label("最近 30 分鐘熱度帶", "section-title")
-        content.append(self.labels["ribbon_title"])
+        self.labels["ribbon_title"].set_hexpand(True)
+        ribbon_header.append(self.labels["ribbon_title"])
+        ribbon_hint = self._label("懸停可查看時間點數值 · 紅線為取樣停擺", "muted")
+        ribbon_header.append(ribbon_hint)
+        content.append(ribbon_header)
         self.ribbon = ThermalRibbon()
         content.append(self.ribbon)
 
@@ -783,16 +1054,33 @@ class FreezeWatch(Gtk.Application):
         split.attach(right_column, 1, 0, 1, 1)
         content.append(split)
 
-        for key, title in (
-            ("top_processes", "目前最活躍程序"),
-            ("top_memory_processes", "佔用記憶體最多的程序"),
-        ):
-            content.append(self._label(title, "section-title"))
+        process_split = Gtk.Grid(column_spacing=18, row_spacing=12)
+        process_split.set_column_homogeneous(True)
+        cpu_proc_column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        cpu_proc_column.append(self._label("目前最活躍程序（CPU）", "section-title"))
+        self.cpu_process_list = Gtk.ListBox()
+        self.cpu_process_list.add_css_class("data-list")
+        self.cpu_process_list.set_selection_mode(Gtk.SelectionMode.NONE)
+        cpu_proc_column.append(self.cpu_process_list)
+        process_split.attach(cpu_proc_column, 0, 0, 1, 1)
+
+        mem_proc_column = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
+        mem_proc_column.append(self._label("佔用記憶體最多的程序（RAM）", "section-title"))
+        self.memory_process_list = Gtk.ListBox()
+        self.memory_process_list.add_css_class("data-list")
+        self.memory_process_list.set_selection_mode(Gtk.SelectionMode.NONE)
+        mem_proc_column.append(self.memory_process_list)
+        process_split.attach(mem_proc_column, 1, 0, 1, 1)
+        content.append(process_split)
+
+        for key in ("top_processes", "top_memory_processes"):
             self.labels[key] = self._label("—", "muted")
             self.labels[key].set_wrap(True)
             self.labels[key].set_wrap_mode(Pango.WrapMode.WORD_CHAR)
             self.labels[key].set_max_width_chars(40)
+            self.labels[key].set_visible(False)
             content.append(self.labels[key])
+
     @staticmethod
     def _default_window_size() -> tuple[int, int]:
         """Open no larger than the monitor, leaving room for panels."""
@@ -828,6 +1116,17 @@ class FreezeWatch(Gtk.Application):
         self._set_level_class(label, level)
         self._set_level_class(card, level)
 
+    def _update_system_card(
+        self, index: int, key: str, value_text: str, detail_text: str, level: str
+    ) -> None:
+        self.labels[f"system_{index}"].set_text(value_text)
+        self.labels[f"system_detail_{index}"].set_text(detail_text)
+        card_entry = self.temperature_cards.get(key.lower())
+        if card_entry is not None:
+            label, _detail_label, card = card_entry
+            self._set_level_class(label, level)
+            self._set_level_class(card, level)
+
     @staticmethod
     def _clear_list(list_box: Gtk.ListBox) -> None:
         while child := list_box.get_first_child():
@@ -846,10 +1145,56 @@ class FreezeWatch(Gtk.Application):
         memory = row.get("memory_usage", "—").split(" / ")[0]
         zombies = row.get("zombies", "—")
         detail = f"{cpu}  ·  {memory}  ·  Z {zombies}"
+        detail_class = "warm" if (as_int(zombies) or 0) > 0 else "muted"
+        detail_label = self._label(detail, detail_class, 1, ellipsize=True)
+        container_row.set_tooltip_text(
+            f"容器：{row.get('container', 'unknown')}\n"
+            f"CPU 使用率：{cpu}\n"
+            f"記憶體使用：{row.get('memory_usage', '—')}\n"
+            f"殭屍程序（Zombies）：{zombies}"
+        )
         content.append(name)
-        content.append(self._label(detail, "muted", 1, ellipsize=True))
+        content.append(detail_label)
         container_row.set_child(content)
         self.container_list.append(container_row)
+
+    def _append_process_row(
+        self, list_box: Gtk.ListBox | None, name_text: str, cpu_text: str, mem_text: str
+    ) -> None:
+        if list_box is None:
+            return
+        row = Gtk.ListBoxRow()
+        row.add_css_class("data-row")
+        content = Gtk.Box(spacing=10)
+        content.add_css_class("list-row")
+        name = self._label(name_text, None, ellipsize=True)
+        name.set_hexpand(True)
+        content.append(name)
+        if cpu_text != "—" or mem_text != "—":
+            cpu_val = as_float(cpu_text) or 0.0
+            mem_val = as_float(mem_text) or 0.0
+            detail_class = (
+                "hot"
+                if cpu_val >= 90.0 or mem_val >= 25.0
+                else ("warm" if cpu_val >= 50.0 or mem_val >= 12.0 else "muted")
+            )
+            detail = f"CPU {cpu_text}  ·  RAM {mem_text}"
+            content.append(self._label(detail, detail_class, 1, ellipsize=True))
+        row.set_child(content)
+        list_box.append(row)
+
+    def _populate_process_list(
+        self, list_box: Gtk.ListBox | None, raw: str | None
+    ) -> None:
+        if list_box is None:
+            return
+        self._clear_list(list_box)
+        entries = parse_process_entries(raw)
+        if not entries:
+            self._append_process_row(list_box, "尚無程序資料", "—", "—")
+            return
+        for name, cpu, mem in entries:
+            self._append_process_row(list_box, name, cpu, mem)
 
     def _append_event_row(self, event: str) -> None:
         if self.event_list is None:
@@ -860,6 +1205,7 @@ class FreezeWatch(Gtk.Application):
         content.add_css_class("list-row")
         parts = event.split("\t", 2)
         timestamp = parts[0] if parts else "—"
+        kind = parts[1] if len(parts) > 2 else ""
         message = parts[-1] if parts else event
 
         # Wrapped rather than ellipsized: the end of a freeze message carries
@@ -867,14 +1213,24 @@ class FreezeWatch(Gtk.Application):
         # part worth reading. Wrapping on word or character boundaries keeps
         # the minimum width small, which an ellipsized label also does but a
         # plain one does not.
-        body = self._label(message, None)
+        body_class = (
+            "danger"
+            if kind in ("FREEZE", "KERNEL")
+            else ("warm" if kind in ("GAP", "INTERRUPTED", "WARN") else None)
+        )
+        body = self._label(message, body_class)
         body.set_wrap(True)
         body.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
         body.set_max_width_chars(48)
         content.append(body)
-        content.append(self._label(timestamp, "muted", ellipsize=True))
+        meta_text = f"{timestamp.replace('T', ' ')[:19]} · {kind}" if kind else timestamp
+        content.append(self._label(meta_text, "muted", ellipsize=True))
         row.set_child(content)
         self.event_list.append(row)
+
+    def _return_to_live(self, _button=None) -> None:
+        if self.incident_dropdown is not None:
+            self.incident_dropdown.set_selected(0)
 
     def _on_incident_selected(self, dropdown, _parameter) -> None:
         index = dropdown.get_selected()
@@ -972,20 +1328,38 @@ class FreezeWatch(Gtk.Application):
         if self.window is None:
             return True
 
+        if self.incident_bar is not None:
+            if reviewing:
+                self.incident_bar.add_css_class("reviewing")
+            else:
+                self.incident_bar.remove_css_class("reviewing")
+        if self.live_button is not None:
+            self.live_button.set_visible(reviewing)
+
         if reviewing:
             incident = self.selected_incident
-            self.labels["incident_summary"].set_text(incident.message)
+            if "incident_eyebrow" in self.labels:
+                self.labels["incident_eyebrow"].set_text(
+                    f"正在檢視歷史事故 · {'系統凍結' if incident.kind == 'FREEZE' else '取樣停擺'}"
+                )
+            self.labels["incident_summary"].set_text(format_incident_summary(incident))
+            self.labels["incident_summary"].set_tooltip_text(incident.message)
             self.labels["hero_eyebrow"].set_text("事故當下熱度")
             self.labels["ribbon_title"].set_text(
                 f"事故前 30 分鐘熱度帶 · {incident.timestamp.replace('T', ' ')[:19]}"
             )
         else:
+            if "incident_eyebrow" in self.labels:
+                self.labels["incident_eyebrow"].set_text("事故回顧")
             self.labels["hero_eyebrow"].set_text("即時熱度")
             self.labels["ribbon_title"].set_text("最近 30 分鐘熱度帶")
             if self.incidents:
                 self.labels["incident_summary"].set_text(
                     f"記錄到 {len(self.incidents)} 次事故，最近一次 "
                     f"{self.incidents[0].timestamp.replace('T', ' ')[:16]}"
+                )
+                self.labels["incident_summary"].set_tooltip_text(
+                    self.incidents[0].message
                 )
 
         self.labels["hero_temp"].set_text(format_temperature(temperatures["cpu"]))
@@ -1016,43 +1390,77 @@ class FreezeWatch(Gtk.Application):
         ):
             self._update_temperature_card(name, value, detail, temperature_level({name: value}))
 
-        self.labels["system_0"].set_text(format_gib(available_kib))
+        swapin_pages = as_int(latest_metric.get("swapin_pages"))
+        mem_lvl = memory_level(available_kib, swapin_pages)
         # Swap read back is the one that hurts: it is memory the machine had
         # already given away and now has to wait for.
-        self.labels["system_detail_0"].set_text(
-            f"swap {format_gib(as_int(latest_metric.get('swap_used_kib')))} · "
-            f"換入 {latest_metric.get('swapin_pages', '—')} 頁"
+        self._update_system_card(
+            0,
+            "可用記憶體",
+            format_gib(available_kib),
+            (
+                f"swap {format_gib(as_int(latest_metric.get('swap_used_kib')))} · "
+                f"換入 {latest_metric.get('swapin_pages', '—')} 頁"
+            ),
+            mem_lvl,
         )
-        self.labels["system_1"].set_text(
-            latest_metric.get("load1", "—")
-        )
+
+        load1_val = as_float(latest_metric.get("load1"))
+        dstate_val = as_int(latest_metric.get("dstate_count"))
+        load_lvl = load_level(load1_val, dstate_val)
         # Uninterruptible sleepers sit beside the load average because they are
         # what makes it climb while nothing is using the CPU.
-        self.labels["system_detail_1"].set_text(
-            f"5m {latest_metric.get('load5', '—')} · "
-            f"15m {latest_metric.get('load15', '—')} · "
-            f"D {latest_metric.get('dstate_count', '—')}"
+        self._update_system_card(
+            1,
+            "負載",
+            latest_metric.get("load1", "—"),
+            (
+                f"5m {latest_metric.get('load5', '—')} · "
+                f"15m {latest_metric.get('load15', '—')} · "
+                f"D {latest_metric.get('dstate_count', '—')}"
+            ),
+            load_lvl,
         )
-        self.labels["system_2"].set_text(
-            f"{latest_metric.get('io_psi_avg10', '—')}%"
+
+        psi_lvl = pressure_level(
+            as_float(latest_metric.get("io_psi_avg10")),
+            as_float(latest_metric.get("io_psi_full_avg10")),
+            as_float(latest_metric.get("memory_psi_full_avg10")),
+            as_float(latest_metric.get("cpu_psi_avg10")),
+            as_float(latest_metric.get("memory_psi_avg10")),
         )
-        self.labels["system_detail_2"].set_text(
-            f"全停 {latest_metric.get('io_psi_full_avg10', '—')}% · "
-            f"CPU {latest_metric.get('cpu_psi_avg10', '—')}% · "
-            f"RAM {latest_metric.get('memory_psi_avg10', '—')}%"
+        self._update_system_card(
+            2,
+            "I/O 壓力",
+            f"{latest_metric.get('io_psi_avg10', '—')}%",
+            (
+                f"全停 {latest_metric.get('io_psi_full_avg10', '—')}% · "
+                f"CPU {latest_metric.get('cpu_psi_avg10', '—')}% · "
+                f"RAM {latest_metric.get('memory_psi_avg10', '—')}%"
+            ),
+            psi_lvl,
         )
-        self.labels["system_3"].set_text(
-            f"{latest_metric.get('root_used_pct', '—')}%"
+
+        disk_lvl = disk_level(
+            as_float(latest_metric.get("root_used_pct")),
+            as_int(latest_metric.get("disk_in_flight")),
+            as_float(latest_metric.get("disk_busy_ms")),
+            SAMPLE_INTERVAL_SECONDS,
         )
-        self.labels["system_detail_3"].set_text(
-            f"根目錄 · 佇列 {latest_metric.get('disk_in_flight', '—')} · "
-            f"忙碌 {format_busy(latest_metric.get('disk_busy_ms'), SAMPLE_INTERVAL_SECONDS)}"
+        self._update_system_card(
+            3,
+            "根目錄",
+            f"{latest_metric.get('root_used_pct', '—')}%",
+            (
+                f"根目錄 · 佇列 {latest_metric.get('disk_in_flight', '—')} · "
+                f"忙碌 {format_busy(latest_metric.get('disk_busy_ms'), SAMPLE_INTERVAL_SECONDS)}"
+            ),
+            disk_lvl,
         )
+
         for key in ("top_processes", "top_memory_processes"):
-            listing = latest_metric.get(key) or "尚無程序資料"
-            if listing == "NA":
-                listing = "尚無程序資料"
-            self.labels[key].set_text(listing.replace(";", "    ·    "))
+            listing = latest_metric.get(key)
+            self.labels[key].set_text(format_process_listing(listing))
 
         if self.ribbon is not None:
             self.ribbon.set_history(metric_rows)
@@ -1082,6 +1490,10 @@ class FreezeWatch(Gtk.Application):
         events = self._recent_events()
         containers = container_signature(current_containers)
         event_signature = tuple(events)
+        processes_sig = (
+            latest_metric.get("top_processes", ""),
+            latest_metric.get("top_memory_processes", ""),
+        )
 
         rebuild_containers = (
             self.container_list is not None
@@ -1090,8 +1502,12 @@ class FreezeWatch(Gtk.Application):
         rebuild_events = (
             self.event_list is not None and event_signature != self.event_signature
         )
+        rebuild_processes = (
+            (self.cpu_process_list is not None or self.memory_process_list is not None)
+            and processes_sig != self.process_signature
+        )
 
-        if rebuild_containers or rebuild_events:
+        if rebuild_containers or rebuild_events or rebuild_processes:
             adjustment = self.scroll.get_vadjustment() if self.scroll else None
             position = adjustment.get_value() if adjustment is not None else 0.0
 
@@ -1106,6 +1522,15 @@ class FreezeWatch(Gtk.Application):
                 self._clear_list(self.event_list)
                 for event in events:
                     self._append_event_row(event)
+
+            if rebuild_processes:
+                self.process_signature = processes_sig
+                self._populate_process_list(
+                    self.cpu_process_list, latest_metric.get("top_processes")
+                )
+                self._populate_process_list(
+                    self.memory_process_list, latest_metric.get("top_memory_processes")
+                )
 
             if adjustment is not None and position > 0:
                 GLib.idle_add(self._restore_scroll, adjustment, position)

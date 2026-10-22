@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.0 - 2026-10-23
+
+- Colour the system pulse cards (`available memory`, `load`, `I/O pressure`, and
+  `root filesystem`) by severity alongside the temperature cards, so a saturated
+  disk, elevated PSI full pressure, uninterruptible sleep pile-up, or swap
+  thrashing stands out immediately.
+- Add hover inspection and time anchors to the 30-minute thermal ribbon, showing
+  exact sample timestamps, sensor readings, and stall warnings under the cursor.
+- Add explanatory tooltips for technical shorthand (`swap-in`, `D` state, PSI
+  `full`, disk `in-flight`, and `Z` zombies) across metric cards and container
+  rows.
+- Render the top CPU and memory processes as side-by-side structured lists with
+  explicit `CPU %` and `RAM %` figures instead of raw semicolon-separated text.
+- Highlight active incident reviews with a dedicated banner style, human-readable
+  incident summaries, event-severity colours, and a one-click button to return
+  to live monitoring.
+- Style the incident dropdown popover in dark mode so GTK themes do not render
+  light text on a white popover background.
+
 ## 0.7.1 - 2026-08-09
 
 - Stop the dashboard dragging the view back up the page. Emptying a list to
