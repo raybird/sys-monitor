@@ -117,7 +117,7 @@ kernel log already carries the controller timeouts and resets that matter.
 資料附加於 metrics TSV 最後的 `gpu_processes` JSON 欄位，預設為 `disabled`。
 每列 JSON 只記有活動或活動未知的 client：`engines` 的數字是引擎占比，字串是
 未量到的原因（`baseline`、`counter_regressed`）；取樣期間無活動的持有者只以名稱
-列在 `idle`（已列為有活動的程式不重複列出）。沒有 client id 或引擎計數器的持有者
+列在 `idle`；已列為有活動、或同時列在 `unsupported`（活動未知）的程式不列入。沒有 client id 或引擎計數器的持有者
 （例如 NVIDIA 專有驅動）依驅動以名稱列在 `unsupported`，不冒充零活動。
 實機（Intel，34 個 client）每列約 0.6 KB，每日約 5 MB。
 採樣讀 `/proc/PID/fd` 與 fdinfo；僅讀 comm，不讀 cmdline。依裝置與
