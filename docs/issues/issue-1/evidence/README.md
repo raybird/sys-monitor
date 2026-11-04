@@ -93,3 +93,16 @@ GPU 實機成本：2026-11-04 在本機真實 `/proc`（約 630 個程序，Inte
 綠燈：2026-11-04 執行 `GDK_BACKEND=x11 GSK_RENDERER=cairo xvfb-run -a bash scripts/check.sh`，exit 0，74 項測試與其他檢查均通過，見 [review2-fix-check.log](review2-fix-check.log)；`git diff --check`（src、tests、scripts、uninstall.sh、docs/architecture.md）通過。
 
 GPU 實機成本：2026-11-04 在本機真實 `/proc`（648 個程序，Intel i915）執行第二輪修正後的 `freeze_gpu.py`，每 10 秒一次、6 次，見 [review2-fix-gpu-cost.json](review2-fix-gpu-cost.json)：每次都是 ok、沒有截斷；穩定後每列 461～588 bytes，每日約 5.1 MB；CPU 中位數約 81 ms。
+
+## 2026-11-04 第三輪審查後的修正（review-4e57fc0.md 判定 PASS，兩項 `需決策` 由使用者決定在本 issue 修）
+
+紅燈：以 `git archive a1c7a76`（修正前）的 src，搭配修正後的 tests 執行，76 項中有 2 個失敗，見 [review3-fix-red.log](review3-fix-red.log)：
+
+| 審查項目 | 紅燈測試 | 修正前的結果 |
+|---|---|---|
+| SF-1：混合顯示卡下閒置名單誤導 | `test_scn005_unmeasured_holder_is_not_listed_idle` | i915 閒置、同時持有 `/dev/nvidia0` 的程序被列為閒置 |
+| SF-2：嚴重度顏色被 `.data-list row label` 蓋掉 | `test_event_severity_colour_is_what_is_drawn`（讀 GTK 實際解析的顏色，不只看 class） | UNCLEAN 事件與 CPU 98.5% 的程序列都是 `rgb(223,232,237)` |
+
+修正：閒置名單也排除 `unsupported` 裡的名稱，與首次採樣的「活動未知」一致。CSS 在 `.data-list row label` 之後加上 `safe`、`warm`、`hot`、`danger` 四個同權重以上的規則，事件、容器與程序清單的等級顏色都會實際畫出來。顏色在清單列背景上的對比：danger 正常 5.54、滑鼠停留 4.85，其他等級都在 5.8 以上；事件與程序清單設為不可選取，不會出現選取背景（danger 在該背景為 4.09）。
+
+綠燈：2026-11-04 執行 `GDK_BACKEND=x11 GSK_RENDERER=cairo xvfb-run -a bash scripts/check.sh`，exit 0，76 項測試與其他檢查均通過，見 [review3-fix-check.log](review3-fix-check.log)；`git diff --check` 通過。GTK 顏色測試起初會跑主迴圈，與其他 GTK 測試同一行程時會 segfault，改為不 present 視窗直接讀樣式後，連續執行皆穩定。

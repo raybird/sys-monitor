@@ -180,8 +180,10 @@ def sample_gpu(proc: Path, previous: dict, now_ns: int,
             continue
         client["engines"] = readings
         report["clients"].append(client)
-    # A program with one busy client and another idle one is busy.
+    # A program with one busy client and another idle one is busy; one whose
+    # other device cannot be measured is unknown, not idle.
     active = {name for client in report["clients"] for name in client["names"]}
+    active.update(name for names in unsupported.values() for name in names)
     report["idle"] = [name for name in idle if name not in active]
     report["unsupported"] = unsupported
     if report["unavailable"] or report["truncated"]:

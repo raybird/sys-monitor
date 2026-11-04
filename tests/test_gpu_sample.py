@@ -148,6 +148,17 @@ class GpuSampleTests(unittest.TestCase):
         self.assertEqual([client["client"] for client in report["clients"]], ["7"])
         self.assertEqual(report["idle"], [])
 
+    def test_scn005_unmeasured_holder_is_not_listed_idle(self):
+        # Idle on the Intel GPU while holding an NVIDIA device: its activity
+        # is unknown, not idle, just as on a first sample.
+        self.client(pid=123, fd=4, client=7, busy=100)
+        (self.proc / "123/fd/5").symlink_to("/dev/nvidia0")
+        (self.proc / "123/fdinfo/5").write_text("pos: 0\n")
+        _, previous = gpu.sample_gpu(self.proc, {}, 1000)
+        report, _ = gpu.sample_gpu(self.proc, previous, 2000)
+        self.assertEqual(report["unsupported"], {"nvidia": ["gpu-owner"]})
+        self.assertEqual(report["idle"], [])
+
     def test_scn005_other_users_are_skipped_not_unavailable(self):
         self.client()
         with mock.patch.object(gpu.os, "getuid", return_value=os.getuid() + 1):

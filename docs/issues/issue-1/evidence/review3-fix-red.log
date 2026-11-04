@@ -1,0 +1,46 @@
+# 2026-11-04T11:49:31+08:00 git archive a1c7a76 的 src，加上第三輪修正後的 tests
+$ GDK_BACKEND=x11 GSK_RENDERER=cairo xvfb-run -a /usr/bin/python3 -m unittest discover -s tests
+  AbstractEventLoopPolicy = getattr(asyncio, "AbstractEventLoopPolicy", object)
+  Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+  Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+  foreground = widget.get_style_context().get_color()
+...F....
+======================================================================
+FAIL: test_scn005_unmeasured_holder_is_not_listed_idle (test_gpu_sample.GpuSampleTests.test_scn005_unmeasured_holder_is_not_listed_idle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 160, in test_scn005_unmeasured_holder_is_not_listed_idle
+    self.assertEqual(report["idle"], [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['gpu-owner'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'gpu-owner'
+
+- ['gpu-owner']
++ []
+
+======================================================================
+FAIL: test_event_severity_colour_is_what_is_drawn (test_window_layout.RowWidthTests.test_event_severity_colour_is_what_is_drawn)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_window_layout.py", line 128, in test_event_severity_colour_is_what_is_drawn
+    self.assertEqual(tuple(round(channel * 255) for channel in (detail.red, detail.green, detail.blue)),
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                     (0xF0, 0xA0, 0x46))
+                     ^^^^^^^^^^^^^^^^^^^
+AssertionError: Tuples differ: (223, 232, 237) != (240, 160, 70)
+
+First differing element 0:
+223
+240
+
+- (223, 232, 237)
++ (240, 160, 70)
+
+----------------------------------------------------------------------
+Ran 76 tests in 22.730s
+
+FAILED (failures=2)
+exit=1

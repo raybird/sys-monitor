@@ -1046,6 +1046,10 @@ class FreezeWatch(Gtk.Application):
             .data-list row:hover { background: #1b2931; background-image: none; }
             .data-list row:selected { background: #223640; background-image: none; }
             .data-list row label { color: #dfe8ed; }
+            .data-list row label.safe { color: #79c4d3; }
+            .data-list row label.warm { color: #d8c568; }
+            .data-list row label.hot { color: #f0a046; }
+            .data-list row label.danger { color: #ef6861; }
             .safe { color: #79c4d3; } .warm { color: #d8c568; }
             .hot { color: #f0a046; } .danger { color: #ef6861; }
             .status-pill { font-size: 12px; font-weight: 700; }

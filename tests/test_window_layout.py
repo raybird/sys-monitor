@@ -103,6 +103,34 @@ class RowWidthTests(unittest.TestCase):
         self.assertIn("danger", rows[1])
         self.assertIn("warm", rows[2])
 
+    def test_event_severity_colour_is_what_is_drawn(self) -> None:
+        # The class alone proves nothing if a broader rule paints over it, so
+        # read the colour GTK actually resolves inside a styled event list.
+        self.app._install_css()
+        self.app.event_list = Gtk.ListBox()
+        self.app.event_list.add_css_class("data-list")
+        window = Gtk.Window()
+        window.set_child(self.app.event_list)
+        for kind in ("UNCLEAN", "INTERRUPTED", "STOP"):
+            self.app._append_event_row(f"2026-11-04T00:00:00+08:00\t{kind}\tprevious session ended")
+        colours = []
+        row = self.app.event_list.get_first_child()
+        while row:
+            colour = row.get_child().get_first_child().get_style_context().get_color()
+            colours.append(tuple(round(channel * 255) for channel in (colour.red, colour.green, colour.blue)))
+            row = row.get_next_sibling()
+        process_list = Gtk.ListBox()
+        process_list.add_css_class("data-list")
+        window.set_child(process_list)
+        self.app._append_process_row(process_list, "busy", "98.5%", "1.0%")
+        detail = process_list.get_first_child().get_child().get_last_child().get_style_context().get_color()
+        window.destroy()
+        self.assertEqual(tuple(round(channel * 255) for channel in (detail.red, detail.green, detail.blue)),
+                         (0xF0, 0xA0, 0x46))
+        self.assertEqual(colours[0], (0xEF, 0x68, 0x61))
+        self.assertEqual(colours[1], (0xD8, 0xC5, 0x68))
+        self.assertEqual(colours[2], (0xDF, 0xE8, 0xED))
+
     def test_container_rows_stay_shrinkable(self) -> None:
         self.app.container_list = Gtk.ListBox()
         self.app._append_container_row(
