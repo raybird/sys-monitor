@@ -106,6 +106,16 @@
 - 狀態：✅ 已完成（2026-11-04）。
 - 證據：[審查修正紀錄](evidence/README.md)、[mutation](evidence/review-fix-mutation.log)（2026-11-04）。
 
+### Task 4.4 — 第二輪審查修正
+
+- 產出與範圍：事件清單補上 UNCLEAN 的嚴重度顏色（rebase 遺漏）；沒有 client id 或計數器的 GPU 持有者依驅動只列名稱；閒置名單排除有活動的名稱。來源：[第二輪審查報告](review-6c972c3.md)、README 待確認事項 TBD-6、TBD-7。
+- 相依：Task 4.2。
+- 驗收編號：SCN-004（支援）、SCN-005（責任 Task）。
+- 完成判準：UNCLEAN 與 FREEZE 同為 danger；NVIDIA 類驅動不再產生每個 fd 一筆 client，仍標示計數器不支援；同一程式不同時列為有活動與閒置。
+- 驗證：GTK 事件列與 fdinfo fixture 的紅綠燈、真實 /proc 量測。
+- 狀態：✅ 已完成（2026-11-04）。
+- 證據：[第二輪審查修正紀錄](evidence/README.md)、[實機成本](evidence/review2-fix-gpu-cost.json)（2026-11-04）。
+
 ## 交付檢查
 
 - 每個已核准 Scenario 都有責任 Task；SCN-002 的定位由 Task 1.1 支援 Task 1.2，不維護第二份進度。

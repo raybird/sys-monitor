@@ -297,7 +297,9 @@ def gpu_summary(value: str | None) -> str:
             f"{engine} {reading:.2f}%" if isinstance(reading, (int, float)) else f"{engine} 活動未知"
             for engine, reading in client.get("engines", {}).items()
         ]
-        lines.append(f"{owners} · {client['driver']} · " + (", ".join(activity) or "計數器不支援，僅確認持有裝置"))
+        lines.append(f"{owners} · {client['driver']} · " + (", ".join(activity) or "活動未知"))
+    for driver, names in (report.get("unsupported") or {}).items():
+        lines.append(f"{driver} 計數器不支援，僅確認持有裝置：" + ", ".join(names))
     if report.get("idle"):
         lines.append("持有裝置、取樣期間無活動：" + ", ".join(report["idle"]))
     if report.get("protected"):
@@ -1400,7 +1402,7 @@ class FreezeWatch(Gtk.Application):
         # plain one does not.
         body_class = (
             "danger"
-            if kind in ("FREEZE", "KERNEL")
+            if kind in ("UNCLEAN", "FREEZE", "KERNEL")
             else ("warm" if kind in ("GAP", "INTERRUPTED", "WARN") else None)
         )
         body = self._label(message, body_class)

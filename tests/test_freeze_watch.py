@@ -254,14 +254,12 @@ class GpuSummaryTests(unittest.TestCase):
                 {"driver": "i915", "device": "0000:00:02.0", "client": "21", "pids": [6926],
                  "names": ["gnome-shell"], "state": "sampled",
                  "engines": {"render": 1.66, "video": "baseline"}},
-                {"driver": "nvidia", "device": "global:nvidia", "client": "", "pids": [9],
-                 "names": ["game"], "state": "unsupported_identity", "engines": {}},
             ],
-            "idle": ["Xwayland"], "protected": 3,
+            "idle": ["Xwayland"], "unsupported": {"nvidia": ["game", "Xorg"]}, "protected": 3,
         })
         text = freeze_watch.gpu_summary(raw)
         self.assertIn("6926 gnome-shell · i915 · render 1.66%, video 活動未知", text)
-        self.assertIn("9 game · nvidia · 計數器不支援，僅確認持有裝置", text)
+        self.assertIn("nvidia 計數器不支援，僅確認持有裝置：game, Xorg", text)
         self.assertIn("持有裝置、取樣期間無活動：Xwayland", text)
         self.assertIn("3 個受保護的程序無法檢查", text)
         self.assertNotIn("不完整", text)

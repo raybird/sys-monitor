@@ -117,7 +117,9 @@ kernel log already carries the controller timeouts and resets that matter.
 資料附加於 metrics TSV 最後的 `gpu_processes` JSON 欄位，預設為 `disabled`。
 每列 JSON 只記有活動或活動未知的 client：`engines` 的數字是引擎占比，字串是
 未量到的原因（`baseline`、`counter_regressed`）；取樣期間無活動的持有者只以名稱
-列在 `idle`。實機（34 個 client）每列約 0.6 KB，每日約 5 MB。
+列在 `idle`（已列為有活動的程式不重複列出）。沒有 client id 或引擎計數器的持有者
+（例如 NVIDIA 專有驅動）依驅動以名稱列在 `unsupported`，不冒充零活動。
+實機（Intel，34 個 client）每列約 0.6 KB，每日約 5 MB。
 採樣讀 `/proc/PID/fd` 與 fdinfo；僅讀 comm，不讀 cmdline。依裝置與
 DRM client-id 去重，使用程序啟動身份辨識 PID 重用；累積引擎 ns 轉為差值，
 首次／缺計數器／計數器回退時不冒充零活動，並依引擎 capacity 換算占比。
@@ -127,7 +129,8 @@ DRM client-id 去重，使用程序啟動身份辨識 PID 重用；累積引擎 
 成本由掃描預算 100 ms 與外層逾時 1 秒限制；512 個程序、每程序 1024 個 fd、
 總計 16384 個 fd、64 個 client、每 client 4 個持有者與 8 個引擎的上限只限制
 記憶體與輸出量。本人但設為不可傾印的程序（瀏覽器沙箱等）記為 `protected`，
-不算採樣失敗；程序中途結束直接略過。截斷或其他讀取失敗才記 truncated／partial；
+不算採樣失敗；在讀到 fd 清單前就結束的程序直接略過，已確認持有 GPU 卻讀不到
+fdinfo 時才記為 unavailable。截斷或其他讀取失敗才記 truncated／partial；
 無權限或不支援的驅動不影響基本監測。
 私有 gpu-counters.json 保存差值基線，收集器重新啟動時重設 session 身份。
 

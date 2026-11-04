@@ -87,6 +87,22 @@ class RowWidthTests(unittest.TestCase):
             self.minimum_width(self.app.event_list), self.BOUNDED_WIDTH
         )
 
+    def test_unclean_event_is_marked_as_danger(self) -> None:
+        # The collector writes UNCLEAN where it used to write FREEZE, so it
+        # must carry the same severity in the event list.
+        self.app.event_list = Gtk.ListBox()
+        for kind in ("UNCLEAN", "FREEZE", "INTERRUPTED"):
+            self.app._append_event_row(f"2026-11-04T00:00:00+08:00\t{kind}\tprevious session ended")
+        rows = []
+        row = self.app.event_list.get_first_child()
+        while row:
+            body = row.get_child().get_first_child()
+            rows.append(body.get_css_classes())
+            row = row.get_next_sibling()
+        self.assertIn("danger", rows[0])
+        self.assertIn("danger", rows[1])
+        self.assertIn("warm", rows[2])
+
     def test_container_rows_stay_shrinkable(self) -> None:
         self.app.container_list = Gtk.ListBox()
         self.app._append_container_row(

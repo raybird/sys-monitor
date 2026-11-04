@@ -27,6 +27,8 @@ def sample_gpu(proc: Path, previous: dict, now_ns: int,
               "clients": [], "idle": []}
     clients: dict[str, dict] = {}
     identities: dict[str, set[str]] = {}
+    unsupported: dict[str, list[str]] = {}
+    idle: list[str] = []
     scanned_fds = 0
     uid = os.getuid()
     processes = []
@@ -100,10 +102,17 @@ def sample_gpu(proc: Path, previous: dict, now_ns: int,
                 continue
             fields = dict(line.split(":", 1) for line in text.splitlines() if ":" in line)
             fields = {key: value.strip() for key, value in fields.items()}
-            driver = fields.get("drm-driver", "unsupported")
+            driver = fields.get("drm-driver") or ("nvidia" if device.startswith("/dev/nvidia") else "unsupported")
             client_id = fields.get("drm-client-id", "")
+            if not client_id.isdigit():
+                # Without a client id (NVIDIA's proprietary driver) descriptors
+                # cannot be told apart or measured; list the holder by name.
+                names = unsupported.setdefault(driver, [])
+                if name not in names:
+                    names.append(name)
+                continue
             device_id = fields.get("drm-pdev", f"global:{driver}")
-            key = f"{device_id}:{client_id}" if client_id.isdigit() else f"unknown:{identity}:{fd_name}"
+            key = f"{device_id}:{client_id}"
             if key not in clients:
                 if len(clients) >= MAX_CLIENTS:
                     report["truncated"] = True
@@ -116,12 +125,7 @@ def sample_gpu(proc: Path, previous: dict, now_ns: int,
                         parts = value.split()
                         if len(parts) == 2 and parts[0].isdigit() and parts[1] == "ns" and len(engines) < 8:
                             engines[field[len("drm-engine-"):]] = int(parts[0])
-                if not client_id.isdigit():
-                    client_state = "unsupported_identity"
-                elif not engines:
-                    client_state = "unsupported_counters"
-                else:
-                    client_state = "sampled"
+                client_state = "sampled" if engines else "unsupported_counters"
                 clients[key] = {"driver": driver, "device": device_id,
                                 "client": client_id, "pids": [], "names": [],
                                 "counters": engines, "capacity": capacity,
@@ -158,19 +162,28 @@ def sample_gpu(proc: Path, previous: dict, now_ns: int,
         client.pop("capacity")
         state["clients"][key] = {"owners": sorted(identities[key]), "engines": values}
         # Compact row: a measured engine is its percentage, an unmeasured one
-        # its state; idle engines are left out, and a holder with no activity
-        # is listed by name only, because this JSON lands in every sample row.
+        # its state; idle engines are left out, and holders with no activity
+        # or no counters are listed by name only, because this JSON lands in
+        # every sample row.
+        if client["state"] == "unsupported_counters":
+            names = unsupported.setdefault(client["driver"], [])
+            names.extend(name for name in client["names"] if name not in names)
+            continue
         readings = {}
         for engine, reading in engines.items():
             if reading["state"] != "sampled":
                 readings[engine] = reading["state"]
             elif reading["pct"]:
                 readings[engine] = reading["pct"]
-        if client["state"] == "sampled" and not readings:
-            report["idle"].extend(name for name in client["names"] if name not in report["idle"])
+        if not readings:
+            idle.extend(name for name in client["names"] if name not in idle)
             continue
         client["engines"] = readings
         report["clients"].append(client)
+    # A program with one busy client and another idle one is busy.
+    active = {name for client in report["clients"] for name in client["names"]}
+    report["idle"] = [name for name in idle if name not in active]
+    report["unsupported"] = unsupported
     if report["unavailable"] or report["truncated"]:
         report["status"] = "partial"
     return report, state

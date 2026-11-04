@@ -77,3 +77,19 @@ GPU 實機成本：2026-11-04 在本機真實 `/proc`（約 630 個程序，Inte
 精煉：2026-11-04 依 code-simplify 移除重複註解，受保護判斷改用回傳值，PID 只解析一次；精煉後以同組 71 項測試驗證。這項自我檢查不是獨立 review。
 
 限制：引擎占比仍只在 Intel i915 的實機上看過，AMD 只有 fixture。GitNexus MCP 沒有本專案的索引，impact／detect_changes 無法執行，呼叫端改用 grep 確認。尚未部署到真實使用者服務。
+
+## 2026-11-04 第二輪審查修正（review-6c972c3.md 的 RETURN TO execute-task）
+
+紅燈：以 `git archive 61a93c3`（第二輪修正前）的 src，搭配修正後的 tests 執行，74 項中有 5 個失敗，見 [review2-fix-red.log](review2-fix-red.log)：
+
+| 審查項目 | 紅燈測試 | 修正前的結果 |
+|---|---|---|
+| MUST FIX：UNCLEAN 事件沒有嚴重度顏色 | `test_unclean_event_is_marked_as_danger` | UNCLEAN 事件內文只有 `muted`，FREEZE 有 `danger` |
+| SF-1：沒有 client id 的驅動 | `test_scn005_driver_without_client_ids_is_listed_by_name`、`test_scn005_missing_counters_exited_fd_and_capacity`、`GpuSummaryTests` | 6 個程序、各 12 個 `/dev/nvidia0` fd 變成 64 個 client 並截斷 |
+| SF-2：名稱同時列為有活動與閒置 | `test_scn005_active_name_is_not_also_listed_idle` | 同一程序的閒置 client 讓名稱出現在 `idle` |
+
+修正：事件清單把 UNCLEAN 與 FREEZE、KERNEL 同列為 danger。沒有 client id 或引擎計數器的持有者，依驅動以名稱列在 `unsupported`，不占 client 上限，畫面顯示「〈驅動〉 計數器不支援，僅確認持有裝置：名稱」；沒有 `drm-driver` 欄位的 `/dev/nvidia*` 記為 nvidia。閒置名單排除已列為有活動的名稱。這個 fixture 的輸出在 200 bytes 以內；沒有 NVIDIA 實機可量。
+
+綠燈：2026-11-04 執行 `GDK_BACKEND=x11 GSK_RENDERER=cairo xvfb-run -a bash scripts/check.sh`，exit 0，74 項測試與其他檢查均通過，見 [review2-fix-check.log](review2-fix-check.log)；`git diff --check`（src、tests、scripts、uninstall.sh、docs/architecture.md）通過。
+
+GPU 實機成本：2026-11-04 在本機真實 `/proc`（648 個程序，Intel i915）執行第二輪修正後的 `freeze_gpu.py`，每 10 秒一次、6 次，見 [review2-fix-gpu-cost.json](review2-fix-gpu-cost.json)：每次都是 ok、沒有截斷；穩定後每列 461～588 bytes，每日約 5.1 MB；CPU 中位數約 81 ms。

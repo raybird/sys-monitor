@@ -1,0 +1,75 @@
+{
+ "measured_at": "2026-11-04T11:15:29+0800",
+ "host": "本機桌面，真實 /proc；GPU 為 Intel i915",
+ "proc_count": 648,
+ "command": "LC_ALL=C /usr/bin/python3 -I freeze_gpu.py --state <tmp> --session m，每 10 秒一次、6 次；第 1 次為基線",
+ "note": "第二輪修正後的 freeze_gpu.py；程序名稱與 PID 不保存，只留計數",
+ "runs": [
+  {
+   "wall_ms": 80.1,
+   "cpu_ms": 79.8,
+   "bytes": 7192,
+   "status": "ok",
+   "truncated": false,
+   "unavailable": 0,
+   "clients": 34,
+   "idle": 0
+  },
+  {
+   "wall_ms": 79.5,
+   "cpu_ms": 79.2,
+   "bytes": 588,
+   "status": "ok",
+   "truncated": false,
+   "unavailable": 0,
+   "clients": 3,
+   "idle": 7
+  },
+  {
+   "wall_ms": 81.1,
+   "cpu_ms": 80.9,
+   "bytes": 461,
+   "status": "ok",
+   "truncated": false,
+   "unavailable": 0,
+   "clients": 2,
+   "idle": 8
+  },
+  {
+   "wall_ms": 91.3,
+   "cpu_ms": 91.0,
+   "bytes": 461,
+   "status": "ok",
+   "truncated": false,
+   "unavailable": 0,
+   "clients": 2,
+   "idle": 8
+  },
+  {
+   "wall_ms": 80.4,
+   "cpu_ms": 80.1,
+   "bytes": 588,
+   "status": "ok",
+   "truncated": false,
+   "unavailable": 0,
+   "clients": 3,
+   "idle": 7
+  },
+  {
+   "wall_ms": 85.9,
+   "cpu_ms": 85.4,
+   "bytes": 588,
+   "status": "ok",
+   "truncated": false,
+   "unavailable": 0,
+   "clients": 3,
+   "idle": 7
+  }
+ ],
+ "median_wall_ms": 81.1,
+ "median_cpu_ms": 80.9,
+ "steady_bytes_max": 588,
+ "daily_bytes_at_8640_rows": 5080320,
+ "last_protected": 34,
+ "last_unsupported_drivers": 0
+}

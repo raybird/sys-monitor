@@ -81,7 +81,9 @@ class GpuSampleTests(unittest.TestCase):
         self.assertEqual(report["clients"][0]["engines"]["render"], 25.0)
         (self.proc / "123/fdinfo/4").write_text("drm-driver: amdgpu\ndrm-client-id: 7\n")
         report, _ = gpu.sample_gpu(self.proc, {}, 3000)
-        self.assertEqual(report["clients"][0]["state"], "unsupported_counters")
+        # A holder without counters is listed by name under its driver.
+        self.assertEqual(report["clients"], [])
+        self.assertEqual(report["unsupported"], {"amdgpu": ["gpu-owner"]})
         (self.proc / "123/fdinfo/4").unlink()
         report, _ = gpu.sample_gpu(self.proc, {}, 4000)
         self.assertEqual(report["clients"], [])
@@ -117,6 +119,34 @@ class GpuSampleTests(unittest.TestCase):
         self.assertEqual(report["protected"], 1)
         self.assertEqual(report["unavailable"], 0)
         self.assertEqual([client["pids"] for client in report["clients"]], [[123]])
+
+    def test_scn005_driver_without_client_ids_is_listed_by_name(self):
+        # NVIDIA's proprietary driver gives no drm-client-id, so every
+        # descriptor would otherwise become a client of its own.
+        for pid in range(100, 106):
+            root = self.proc / str(pid)
+            (root / "fd").mkdir(parents=True)
+            (root / "fdinfo").mkdir()
+            (root / "stat").write_text(f"{pid} (game) S " + "0 " * 18 + "50")
+            (root / "comm").write_text("game\n")
+            for fd in range(3, 15):
+                (root / "fd" / str(fd)).symlink_to("/dev/nvidia0")
+                (root / "fdinfo" / str(fd)).write_text("pos: 0\nflags: 02\n")
+        report, _ = gpu.sample_gpu(self.proc, {}, 1000)
+        self.assertEqual(report["status"], "ok")
+        self.assertFalse(report["truncated"])
+        self.assertEqual(report["clients"], [])
+        self.assertEqual(report["unsupported"], {"nvidia": ["game"]})
+        self.assertLess(len(json.dumps(report)), 200)
+
+    def test_scn005_active_name_is_not_also_listed_idle(self):
+        self.client(pid=123, fd=4, client=7, busy=100)
+        self.client(pid=123, fd=5, client=8, busy=100)
+        _, previous = gpu.sample_gpu(self.proc, {}, 1000)
+        self.client(pid=123, fd=4, client=7, busy=600)
+        report, _ = gpu.sample_gpu(self.proc, previous, 2000)
+        self.assertEqual([client["client"] for client in report["clients"]], ["7"])
+        self.assertEqual(report["idle"], [])
 
     def test_scn005_other_users_are_skipped_not_unavailable(self):
         self.client()
