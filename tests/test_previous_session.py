@@ -98,6 +98,17 @@ class PreviousSessionTests(unittest.TestCase):
         self.assertIn(f"metrics={current}", message)
         self.assertNotIn(str(old), message)
 
+    def test_scn003_session_without_samples_does_not_borrow_an_earlier_session(self):
+        old = self.metrics("old", 1700172800)
+        current = self.metrics("current")
+        self.seed(old, stop=True)
+        with self.events.open("a") as handle:
+            handle.write(f"2026-10-05T00:03:00+08:00\tSTART\tboot=other-boot metrics={current}\n")
+        message = self.run_collector()[0][2]
+        self.assertIn("last_sample=unknown", message)
+        self.assertNotIn(str(old), message)
+        self.assertNotIn(datetime.fromtimestamp(1700172800).astimezone().isoformat(), message)
+
     def test_scn004_different_boot_reports_uncertainty(self):
         self.seed(self.metrics("first", 1700000000))
         record = self.run_collector()[0]
@@ -123,7 +134,8 @@ class PreviousSessionTests(unittest.TestCase):
         with metrics.open() as handle:
             rows = list(csv.DictReader(handle, delimiter="\t"))
         data = json.loads(rows[-1]["gpu_processes"])
-        self.assertEqual(data["clients"][0]["engines"]["render"]["busy_ns"], 0)
+        self.assertEqual(data["clients"], [])
+        self.assertEqual(data["idle"], ["gpu-owner"])
         self.assertEqual((self.state / "gpu-counters.json").stat().st_mode & 0o777, 0o600)
 
     def test_scn005_disabled_has_no_scan_state(self):

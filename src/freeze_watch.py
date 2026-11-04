@@ -40,6 +40,8 @@ NOTEWORTHY_EVENTS = ("UNCLEAN", "FREEZE", "KERNEL", "INTERRUPTED", "GAP", "WARN"
 INCIDENT_KINDS = ("UNCLEAN", "FREEZE", "GAP")
 INCIDENT_LIMIT = 8
 INCIDENT_WINDOW_SECONDS = 30 * 60
+# The ribbon shows the last half hour of 10 s samples.
+HISTORY_ROWS = 180
 EVENT_HISTORY_LIMIT = 12
 # Matches the collector's default. Only used to turn busy milliseconds into a
 # share of the interval, so a mismatch misreads that one figure and nothing else.
@@ -84,8 +86,14 @@ def tail_text(path: Path, byte_limit: int = 160_000) -> str:
         with path.open("rb") as handle:
             handle.seek(0, os.SEEK_END)
             size = handle.tell()
-            handle.seek(max(0, size - byte_limit))
+            start = max(0, size - byte_limit)
+            # Start one byte early so a cut that lands on a line boundary keeps
+            # that line, then drop the partial line in front of it.
+            handle.seek(max(0, start - 1))
             data = handle.read()
+            if start > 0:
+                newline = data.find(b"\n")
+                data = data[newline + 1:] if newline >= 0 else b""
         return data.decode("utf-8", errors="replace")
     except OSError:
         return ""
@@ -98,24 +106,32 @@ def newest_file(pattern: str) -> Path | None:
     return max(files, key=lambda item: item.stat().st_mtime)
 
 
-def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_000) -> list[dict[str, str]]:
+def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_000,
+                  min_rows: int = 0) -> list[dict[str, str]]:
     if path is None:
         return []
 
-    lines = tail_text(path, byte_limit).splitlines()
-    if not lines:
-        return []
-
-    # restval keeps a row written before a column existed reading as missing
-    # data rather than as None, which every caller here would render literally.
-    rows = list(
-        csv.DictReader(lines, fieldnames=fields, delimiter="\t", restval="NA")
-    )
-    return [row for row in rows if row.get("timestamp") and row["timestamp"] != "timestamp"]
+    while True:
+        lines = tail_text(path, byte_limit).splitlines()
+        # restval keeps a row written before a column existed reading as missing
+        # data rather than as None, which every caller here would render literally.
+        rows = [
+            row for row in csv.DictReader(lines, fieldnames=fields, delimiter="\t", restval="NA")
+            if row.get("timestamp") and row["timestamp"] != "timestamp"
+        ]
+        # Row width varies (GPU JSON), so a fixed byte window can hold far
+        # fewer rows than the view needs; widen until it does or the file ends.
+        try:
+            whole_file = path.stat().st_size <= byte_limit
+        except OSError:
+            whole_file = True
+        if len(rows) >= min_rows or whole_file:
+            return rows
+        byte_limit *= 4
 
 
 def read_tsv_tail(pattern: str, fields: list[str]) -> list[dict[str, str]]:
-    return read_tsv_path(newest_file(pattern), fields)
+    return read_tsv_path(newest_file(pattern), fields, min_rows=HISTORY_ROWS)
 
 
 class Incident(NamedTuple):
@@ -175,12 +191,13 @@ def metrics_file_covering(timestamp: str) -> Path | None:
         if not rows:
             continue
         try:
-            with path.open() as handle:
+            with path.open(errors="replace") as handle:
                 first_row = next(csv.DictReader(handle, delimiter="\t"), {})
         except OSError:
             continue
         first = as_int(first_row.get("epoch"))
-        last = as_int(rows[-1].get("epoch"))
+        last = next((epoch for row in reversed(rows)
+                     if (epoch := as_int(row.get("epoch"))) is not None), None)
         if first is not None and last is not None and first <= target <= last:
             return path
     return None
@@ -234,7 +251,7 @@ def incident_paths(incident: Incident, include_after: bool = False) -> list[Path
 def metric_window(path: Path, start: int, finish: int) -> list[dict[str, str]]:
     rows = []
     try:
-        with path.open() as handle:
+        with path.open(errors="replace") as handle:
             for row in csv.DictReader(handle, delimiter="\t"):
                 epoch = as_int(row.get("epoch"))
                 if epoch is not None and start <= epoch <= finish:
@@ -255,7 +272,7 @@ def incident_rows(incident: Incident) -> list[dict[str, str]]:
         if samples and end is not None and (as_int(samples[0].get("epoch")) or 0) < end - INCIDENT_WINDOW_SECONDS:
             break
     if end is None:
-        return rows[-180:]
+        return rows[-HISTORY_ROWS:]
     return [row for row in rows if end - INCIDENT_WINDOW_SECONDS <= (as_int(row.get("epoch")) or 0) <= end]
 
 
@@ -265,6 +282,8 @@ def gpu_summary(value: str | None) -> str:
     try:
         report = json.loads(value)
     except (TypeError, ValueError):
+        report = None
+    if not isinstance(report, dict):
         return "GPU 程序資料無法讀取"
     lines = []
     if report.get("status") != "ok":
@@ -273,11 +292,16 @@ def gpu_summary(value: str | None) -> str:
         lines.append("已達掃描上限，僅列出部分程序")
     for client in report.get("clients", []):
         owners = ", ".join(f"{pid} {name}" for pid, name in zip(client["pids"], client["names"]))
-        activity = []
-        for engine, reading in client.get("engines", {}).items():
-            pct = reading.get("pct")
-            activity.append(f"{engine} {pct:.2f}%" if pct is not None else f"{engine} 活動未知")
+        # A number is a measured percentage; a string names why it is unmeasured.
+        activity = [
+            f"{engine} {reading:.2f}%" if isinstance(reading, (int, float)) else f"{engine} 活動未知"
+            for engine, reading in client.get("engines", {}).items()
+        ]
         lines.append(f"{owners} · {client['driver']} · " + (", ".join(activity) or "計數器不支援，僅確認持有裝置"))
+    if report.get("idle"):
+        lines.append("持有裝置、取樣期間無活動：" + ", ".join(report["idle"]))
+    if report.get("protected"):
+        lines.append(f"{report['protected']} 個受保護的程序無法檢查（例如瀏覽器沙箱）")
     return "\n".join(lines) or "未找到可見的 GPU 裝置持有者；不代表沒有 GPU 活動"
 
 
@@ -820,7 +844,7 @@ class ThermalRibbon(Gtk.DrawingArea):
         self.add_controller(motion)
 
     def set_history(self, rows: list[dict[str, str]]) -> None:
-        visible = rows[-180:]
+        visible = rows[-HISTORY_ROWS:]
         self.history = [
             {
                 "timestamp": row.get("timestamp", ""),

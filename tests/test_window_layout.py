@@ -216,12 +216,17 @@ class DropdownContrastTests(unittest.TestCase):
         Gtk.init()
         settings = Gtk.Settings.get_default()
         old_dark = settings.get_property("gtk-application-prefer-dark-theme")
+        old_theme = settings.get_property("gtk-theme-name")
         old_animations = settings.get_property("gtk-enable-animations")
         settings.set_property("gtk-enable-animations", False)
         app = freeze_watch.FreezeWatch(True)
         app._install_css()
         try:
-            for dark in (False, True):
+            # The host theme and a fixed Adwaita, so the result does not
+            # depend only on whatever theme the test machine happens to use.
+            for theme, dark in [(name, dark) for name in dict.fromkeys((old_theme, "Adwaita"))
+                                for dark in (False, True)]:
+                settings.set_property("gtk-theme-name", theme)
                 settings.set_property("gtk-application-prefer-dark-theme", dark)
                 window = Gtk.Window()
                 dropdown = Gtk.DropDown.new_from_strings(["即時監測", "非正常關機／疑似當機"])
@@ -246,15 +251,21 @@ class DropdownContrastTests(unittest.TestCase):
                         Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
                     blue, green, red, alpha = surface.get_data()[:4]
                     self.assertEqual(alpha, 255)
-                    foreground = next(widget for widget in descendants(row) if widget.get_css_name() == "label").get_style_context().get_color()
                     bg = luminance([red / 255, green / 255, blue / 255])
-                    fg = luminance([foreground.red, foreground.green, foreground.blue])
-                    ratio = (max(bg, fg) + 0.05) / (min(bg, fg) + 0.05)
-                    with self.subTest(dark=dark, state=state):
-                        self.assertGreaterEqual(ratio, 4.5)
+                    # The label and the selection check mark both have to read.
+                    marks = [widget for widget in descendants(row)
+                             if widget.get_css_name() in ("label", "image")]
+                    self.assertTrue(any(widget.get_css_name() == "label" for widget in marks))
+                    for widget in marks:
+                        foreground = widget.get_style_context().get_color()
+                        fg = luminance([foreground.red, foreground.green, foreground.blue])
+                        ratio = (max(bg, fg) + 0.05) / (min(bg, fg) + 0.05)
+                        with self.subTest(theme=theme, dark=dark, state=state, part=widget.get_css_name()):
+                            self.assertGreaterEqual(ratio, 4.5)
                 window.destroy()
         finally:
             settings.set_property("gtk-application-prefer-dark-theme", old_dark)
+            settings.set_property("gtk-theme-name", old_theme)
             settings.set_property("gtk-enable-animations", old_animations)
 
 

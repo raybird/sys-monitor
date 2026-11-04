@@ -72,6 +72,40 @@
 - 狀態：✅ 已完成（2026-10-07）。
 - 證據：[紅綠燈、層級與限制](evidence/README.md)（2026-10-07）。
 
+## Phase 4 — 審查修正（2026-11-04）
+
+來源：[審查報告](review-9f5712f.md) 判定 RETURN TO execute-task；處理方式依 README 待確認事項 TBD-3 至 TBD-5。
+
+### Task 4.1 — 尾端讀取與回顧窗口
+
+- 產出與範圍：src/freeze_watch.py 尾端讀取丟掉截斷的首行，即時檢視依列數讀滿 180 列，無效位元組以替換字元讀取（MF-1、MF-2a、SF-3）。
+- 相依：Task 1.2、Task 3.3。
+- 驗收編號：SCN-002、SCN-006（支援）。
+- 完成判準：截點在列中間時回顧與報告讀到同一個窗口；寬列時熱度帶仍有 30 分鐘；檔案損毀不讓儀表板丟例外。
+- 驗證：不等寬列 fixture 的紅綠燈。
+- 狀態：✅ 已完成（2026-11-04）。
+- 證據：[審查修正紀錄](evidence/README.md)（2026-11-04）。
+
+### Task 4.2 — GPU 紀錄瘦身與掃描訊號
+
+- 產出與範圍：src/freeze_gpu.py 精簡每列 JSON、只掃本人的程序且新的先掃、受保護程序另計、程序名稱容錯解碼；src/freeze_watch.py 對應顯示（MF-2b、SF-1、SF-2）。
+- 相依：Task 3.2。
+- 驗收編號：SCN-005（責任 Task）。
+- 完成判準：持有者與活動仍分開，不冒充零活動；實機不再永遠 partial；每日增量與 CPU 在真實 /proc 量測並記錄。
+- 驗證：fdinfo fixture 紅綠燈與真實 /proc 前後對比。
+- 狀態：✅ 已完成（2026-11-04）。
+- 證據：[審查修正紀錄](evidence/README.md)、[實機成本](evidence/review-fix-gpu-cost.json)（2026-11-04）。
+
+### Task 4.3 — 移除與證據補強
+
+- 產出與範圍：uninstall.sh 移除 freeze_gpu.py，check.sh 檢查移除後不留目錄；補強 SCN-003 與 SCN-001 測試，重拍截圖（SF-4、SF-5）。
+- 相依：無。
+- 驗收編號：SCN-001、SCN-003、SCN-005（支援）。
+- 完成判準：移除後不留檔案；SCN-003 新測試在 mutation 下失敗；SCN-001 涵蓋固定佈景與勾選圖示。
+- 驗證：check.sh 紅綠燈、mutation 紀錄、Xvfb 截圖目視。
+- 狀態：✅ 已完成（2026-11-04）。
+- 證據：[審查修正紀錄](evidence/README.md)、[mutation](evidence/review-fix-mutation.log)（2026-11-04）。
+
 ## 交付檢查
 
 - 每個已核准 Scenario 都有責任 Task；SCN-002 的定位由 Task 1.1 支援 Task 1.2，不維護第二份進度。

@@ -1,0 +1,20 @@
+# 2026-11-04T10:50:01+08:00 mutation：src/freeze-monitor:564 不在 START／STOP 重設檔案清單（跨 session 借用）
+            $2 == "NEVER" { count = 0 }
+$ /usr/bin/python3 -m unittest -v <新舊兩項 SCN-003 測試>
+test_scn003_session_without_samples_does_not_borrow_an_earlier_session (tests.test_previous_session.PreviousSessionTests.test_scn003_session_without_samples_does_not_borrow_an_earlier_session) ... FAIL
+test_scn003_does_not_borrow_a_previous_session_rotation (tests.test_previous_session.PreviousSessionTests.test_scn003_does_not_borrow_a_previous_session_rotation) ... ok
+
+======================================================================
+FAIL: test_scn003_session_without_samples_does_not_borrow_an_earlier_session (tests.test_previous_session.PreviousSessionTests.test_scn003_session_without_samples_does_not_borrow_an_earlier_session)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<mutant>/tests/test_previous_session.py", line 108, in test_scn003_session_without_samples_does_not_borrow_an_earlier_session
+    self.assertIn("last_sample=unknown", message)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'last_sample=unknown' not found in 'previous session ended without STOP; boot_changed=yes cause=unknown (power loss, forced reboot or freeze); last_sample=2023-11-17T06:13:20+08:00 silent_for=93587801s metrics=<tmp>/freeze-monitor/metrics-old.tsv'
+
+----------------------------------------------------------------------
+Ran 2 tests in 4.665s
+
+FAILED (failures=1)
+exit=1

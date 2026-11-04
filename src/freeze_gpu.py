@@ -4,49 +4,96 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 import time
 from itertools import islice
 from pathlib import Path
 
+# The scan budget bounds the cost; these caps only bound memory and output.
+# A full desktop (about 350 own processes, 13 500 descriptors) scans in about
+# 30 ms, so the per-process and total descriptor caps sit well above it.
+MAX_PROCESSES = 512
+MAX_FDS_PER_PROCESS = 1024
+MAX_FDS = 16_384
+MAX_CLIENTS = 64
+
 
 def sample_gpu(proc: Path, previous: dict, now_ns: int,
                budget_ns: int = 100_000_000) -> tuple[dict, dict]:
     deadline = time.monotonic_ns() + budget_ns
-    report = {"status": "ok", "truncated": False, "unavailable": 0, "clients": []}
+    report = {"status": "ok", "truncated": False, "unavailable": 0, "protected": 0,
+              "clients": [], "idle": []}
     clients: dict[str, dict] = {}
     identities: dict[str, set[str]] = {}
     scanned_fds = 0
+    uid = os.getuid()
+    processes = []
     try:
         with os.scandir(proc) as entries:
-            processes = [Path(entry.path) for entry in islice((e for e in entries if e.name.isdigit()), 513)]
+            for entry in entries:
+                if not entry.name.isdigit():
+                    continue
+                # Other users' processes (kernel threads, system daemons) are
+                # unreadable by design; they are not a failed read of ours.
+                try:
+                    if entry.stat().st_uid != uid:
+                        continue
+                except OSError:
+                    continue
+                processes.append((int(entry.name), entry.path))
     except OSError:
         report["status"] = "unavailable"
         return report, {"time_ns": now_ns, "clients": {}}
-    for index, process in enumerate(sorted(processes, key=lambda p: int(p.name))):
-        if index >= 512 or time.monotonic_ns() >= deadline or scanned_fds >= 2048:
+    def is_protected(error: OSError) -> bool:
+        # A process that exited mid-scan is gone, not missing data. EACCES on
+        # one's own process means it made itself non-dumpable (browser
+        # sandboxes, keyrings): unreadable by design, counted on its own.
+        if error.errno == errno.EACCES:
+            return True
+        if error.errno not in (errno.ENOENT, errno.ESRCH):
+            report["unavailable"] += 1
+        return False
+
+    # Newest first, so a cap never hides the program that was just started.
+    for index, (pid, process) in enumerate(sorted(processes, reverse=True)):
+        if index >= MAX_PROCESSES or time.monotonic_ns() >= deadline or scanned_fds >= MAX_FDS:
             report["truncated"] = True
             break
+        protected = False
         try:
-            start = process.joinpath("stat").read_text().rsplit(")", 1)[1].split()[19]
-            identity = f"{process.name}:{start}"
-            name = process.joinpath("comm").read_text()[:32].strip().replace("\t", " ").replace("\n", " ")
-            with os.scandir(process / "fd") as entries:
-                descriptors = [Path(entry.path) for entry in islice(entries, 65)]
-        except (OSError, IndexError):
+            with open(f"{process}/stat", "rb") as handle:
+                start = handle.read().decode(errors="replace").rsplit(")", 1)[1].split()[19]
+            identity = f"{pid}:{start}"
+            # comm is cut at 15 bytes, often inside a multi-byte character.
+            with open(f"{process}/comm", "rb") as handle:
+                name = handle.read().decode(errors="replace")[:32].strip()
+            name = name.replace("\t", " ").replace("\n", " ")
+            with os.scandir(f"{process}/fd") as entries:
+                descriptors = [(entry.name, entry.path) for entry in islice(entries, MAX_FDS_PER_PROCESS + 1)]
+        except IndexError:
             report["unavailable"] += 1
             continue
-        for fd_index, fd in enumerate(descriptors):
-            if fd_index >= 64 or scanned_fds >= 2048 or time.monotonic_ns() >= deadline:
+        except OSError as error:
+            report["protected"] += is_protected(error)
+            continue
+        for fd_index, (fd_name, fd_path) in enumerate(descriptors):
+            if fd_index >= MAX_FDS_PER_PROCESS or scanned_fds >= MAX_FDS or time.monotonic_ns() >= deadline:
                 report["truncated"] = True
                 break
             scanned_fds += 1
             try:
-                device = os.readlink(fd)
-                if not (device.startswith("/dev/dri/") or device.startswith("/dev/nvidia")):
-                    continue
-                with process.joinpath("fdinfo", fd.name).open() as handle:
+                device = os.readlink(fd_path)
+            except OSError as error:
+                protected = is_protected(error) or protected
+                continue
+            if not (device.startswith("/dev/dri/") or device.startswith("/dev/nvidia")):
+                continue
+            # The descriptor is known to be a GPU; failing to read its usage is
+            # a real gap in the data, whatever the reason.
+            try:
+                with open(f"{process}/fdinfo/{fd_name}") as handle:
                     text = handle.read(16_384)
             except OSError:
                 report["unavailable"] += 1
@@ -56,9 +103,9 @@ def sample_gpu(proc: Path, previous: dict, now_ns: int,
             driver = fields.get("drm-driver", "unsupported")
             client_id = fields.get("drm-client-id", "")
             device_id = fields.get("drm-pdev", f"global:{driver}")
-            key = f"{device_id}:{client_id}" if client_id.isdigit() else f"unknown:{identity}:{fd.name}"
+            key = f"{device_id}:{client_id}" if client_id.isdigit() else f"unknown:{identity}:{fd_name}"
             if key not in clients:
-                if len(clients) >= 16:
+                if len(clients) >= MAX_CLIENTS:
                     report["truncated"] = True
                     continue
                 engines, capacity = {}, {}
@@ -82,10 +129,10 @@ def sample_gpu(proc: Path, previous: dict, now_ns: int,
                 identities[key] = set()
             identities[key].add(identity)
             client = clients[key]
-            pid = int(process.name)
             if pid not in client["pids"] and len(client["pids"]) < 4:
                 client["pids"].append(pid)
                 client["names"].append(name)
+        report["protected"] += protected
 
     elapsed = now_ns - previous.get("time_ns", now_ns)
     state = {"time_ns": now_ns, "clients": {}}
@@ -109,9 +156,21 @@ def sample_gpu(proc: Path, previous: dict, now_ns: int,
             values[engine] = value
             engines[engine] = {"busy_ns": busy, "pct": pct, "state": counter_state}
         client.pop("capacity")
-        client["engines"] = engines
-        report["clients"].append(client)
         state["clients"][key] = {"owners": sorted(identities[key]), "engines": values}
+        # Compact row: a measured engine is its percentage, an unmeasured one
+        # its state; idle engines are left out, and a holder with no activity
+        # is listed by name only, because this JSON lands in every sample row.
+        readings = {}
+        for engine, reading in engines.items():
+            if reading["state"] != "sampled":
+                readings[engine] = reading["state"]
+            elif reading["pct"]:
+                readings[engine] = reading["pct"]
+        if client["state"] == "sampled" and not readings:
+            report["idle"].extend(name for name in client["names"] if name not in report["idle"])
+            continue
+        client["engines"] = readings
+        report["clients"].append(client)
     if report["unavailable"] or report["truncated"]:
         report["status"] = "partial"
     return report, state

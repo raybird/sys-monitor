@@ -113,16 +113,22 @@ kernel log already carries the controller timeouts and resets that matter.
 
 ## GPU 程序紀錄與安全匯出
 
-截至 2026-10-05，設定 `FREEZE_WATCH_GPU_PROCESSES=1` 可啟用 `freeze_gpu.py`。
+截至 2026-11-04，設定 `FREEZE_WATCH_GPU_PROCESSES=1` 可啟用 `freeze_gpu.py`。
 資料附加於 metrics TSV 最後的 `gpu_processes` JSON 欄位，預設為 `disabled`。
+每列 JSON 只記有活動或活動未知的 client：`engines` 的數字是引擎占比，字串是
+未量到的原因（`baseline`、`counter_regressed`）；取樣期間無活動的持有者只以名稱
+列在 `idle`。實機（34 個 client）每列約 0.6 KB，每日約 5 MB。
 採樣讀 `/proc/PID/fd` 與 fdinfo；僅讀 comm，不讀 cmdline。依裝置與
 DRM client-id 去重，使用程序啟動身份辨識 PID 重用；累積引擎 ns 轉為差值，
 首次／缺計數器／計數器回退時不冒充零活動，並依引擎 capacity 換算占比。
 契約依 [Linux 核心文件](https://docs.kernel.org/gpu/drm-usage-stats.html)。
 
-截至 2026-10-05，單次掃描上限為 512 個程序、每程序 64 個 fd、總計 2048 個 fd、
-16 個 client、每 client 4 個持有者與 8 個引擎；掃描預算 100 ms，外層逾時為 1 秒。
-受限時記錄 truncated／partial；無權限或不支援的驅動不影響基本監測。
+截至 2026-11-04，只掃描本人的程序，PID 新的先掃，讓上限不會遮住剛啟動的程式。
+成本由掃描預算 100 ms 與外層逾時 1 秒限制；512 個程序、每程序 1024 個 fd、
+總計 16384 個 fd、64 個 client、每 client 4 個持有者與 8 個引擎的上限只限制
+記憶體與輸出量。本人但設為不可傾印的程序（瀏覽器沙箱等）記為 `protected`，
+不算採樣失敗；程序中途結束直接略過。截斷或其他讀取失敗才記 truncated／partial；
+無權限或不支援的驅動不影響基本監測。
 私有 gpu-counters.json 保存差值基線，收集器重新啟動時重設 session 身份。
 
 截至 2026-10-05，診斷報告為事件前 30 分鐘／後 5 分鐘的純文字預覽，
@@ -130,7 +136,10 @@ DRM client-id 去重，使用程序啟動身份辨識 PID 重用；累積引擎 
 程序名稱與參數；核心訊息僅保留錯誤分類，原始內容仍留於本機 events.log。
 非正常關機的前次核心證據可能由新 session 讀回，報告標示其讀回時間。
 
-最後驗證日期：2026-10-05。
+截至 2026-11-04，儀表板讀 TSV 尾端時丟掉被截斷的第一行，即時熱度帶依列數讀滿
+30 分鐘（180 列），不受每列寬度影響；檔案中的無效位元組以替換字元讀取。
+
+最後驗證日期：2026-11-04（GPU 程序紀錄、尾端讀取與報告窗口）。
 
 ## Compatibility
 

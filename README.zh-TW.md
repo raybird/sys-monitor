@@ -115,13 +115,15 @@ curl -fsSL https://raw.githubusercontent.com/raybird/sys-monitor/main/uninstall.
 `systemctl --user restart freeze-monitor.service` 即可啟用；升級會保留設定。
 支援 Linux DRM fdinfo（例如 AMD／Intel），其他驅動或無權限時會明確顯示
 限制。裝置持有者與實際引擎活動分開，首次取樣或缺計數器時活動未知。
+截至 2026-11-04，只檢查本人的程序，受保護的程序（例如瀏覽器沙箱）另列數量；
+啟用後 metrics 檔每日約增加 5 MB（實機 34 個 GPU client）。
 
 截至 2026-10-05，選取事件後按「預覽診斷報告」，確認後可匯出純文字檔。
 範圍為事件前 30 分鐘／後 5 分鐘，預設省略路徑、程序名稱與參數，
 核心訊息僅保留錯誤分類。缺資料不會被推測補齊。
 非正常關機可能是斷電、強制重啟或當機，單憑缺少 STOP 無法確認原因。
 
-最後驗證日期：2026-10-05。
+最後驗證日期：2026-11-04（GPU 程序紀錄）。
 
 ## 紀錄位置
 
