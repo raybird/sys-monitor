@@ -8,7 +8,7 @@ Freeze Watch 是 Linux 使用者層級的 Bash 收集器與 Python GTK4 儀表�
 
 ## 提交與交付
 
-分支使用 issue-ID 加描述，PR 目標為 main。提交訊息只描述功能，不含 AI 署名或結尾附註行。issue 文件位於 docs/issues/issue-ID/。
+分支使用 issue-ID 加描述，目標為 main。本專案不建立 PR，交付範圍以 origin/main 與分支的 merge-base 為 BASE，由獨立 reviewer 在本地審查，報告存於 docs/issues/issue-ID/（2026-11-04 使用者決定；各 issue 仍在 README 的 Gate 豁免紀錄記錄）。提交訊息只描述功能，不含 AI 署名或結尾附註行。issue 文件位於 docs/issues/issue-ID/。
 
 ## 常青文件更新責任
 
