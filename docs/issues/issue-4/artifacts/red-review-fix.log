@@ -1,0 +1,87 @@
+test_comm_with_parentheses_and_spaces_is_parsed (test_container_probe.ProcessCpuIntervalTests.test_comm_with_parentheses_and_spaces_is_parsed) ... ok
+test_damaged_cache_only_loses_the_damaged_entries (test_container_probe.ProcessCpuIntervalTests.test_damaged_cache_only_loses_the_damaged_entries) ... ERROR
+test_equal_interval_ranks_by_lifetime_average (test_container_probe.ProcessCpuIntervalTests.test_equal_interval_ranks_by_lifetime_average) ... FAIL
+test_kernel_comm_is_a_prefix_of_the_top_name (test_container_probe.ProcessCpuIntervalTests.test_kernel_comm_is_a_prefix_of_the_top_name) ... ok
+test_pid_must_be_ascii_digits_and_1024_is_within_budget (test_container_probe.ProcessCpuIntervalTests.test_pid_must_be_ascii_digits_and_1024_is_within_budget) ... 
+  test_pid_must_be_ascii_digits_and_1024_is_within_budget (test_container_probe.ProcessCpuIntervalTests.test_pid_must_be_ascii_digits_and_1024_is_within_budget) (pid='١٢') ... ERROR
+test_process_gone_before_read_and_clock_not_moving_forward (test_container_probe.ProcessCpuIntervalTests.test_process_gone_before_read_and_clock_not_moving_forward) ... ok
+test_scn001_spiking_long_lived_process_ranks_first_by_interval (test_container_probe.ProcessCpuIntervalTests.test_scn001_spiking_long_lived_process_ranks_first_by_interval) ... ok
+test_scn002_without_previous_ranks_by_lifetime_and_says_why (test_container_probe.ProcessCpuIntervalTests.test_scn002_without_previous_ranks_by_lifetime_and_says_why) ... ok
+test_scn003_new_process_needs_one_second_of_life (test_container_probe.ProcessCpuIntervalTests.test_scn003_new_process_needs_one_second_of_life) ... FAIL
+test_scn003_pid_reuse_new_and_exited_processes (test_container_probe.ProcessCpuIntervalTests.test_scn003_pid_reuse_new_and_exited_processes) ... ok
+test_scn004_name_mismatch_means_another_pid_namespace (test_container_probe.ProcessCpuIntervalTests.test_scn004_name_mismatch_means_another_pid_namespace) ... ERROR
+test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container (test_container_probe.ProcessCpuIntervalTests.test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container) ... ok
+test_scn005_collect_keeps_readings_of_live_deep_processes_only (test_container_probe.ProcessCpuIntervalTests.test_scn005_collect_keeps_readings_of_live_deep_processes_only) ... ok
+test_ticks_going_backwards_are_unknown (test_container_probe.ProcessCpuIntervalTests.test_ticks_going_backwards_are_unknown) ... ok
+
+======================================================================
+ERROR: test_damaged_cache_only_loses_the_damaged_entries (test_container_probe.ProcessCpuIntervalTests.test_damaged_cache_only_loses_the_damaged_entries)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 684, in test_damaged_cache_only_loses_the_damaged_entries
+    processes, _, _, _, _ = self.sample(rows, previous, 1010.0)
+                            ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 531, in sample
+    return probe.process_sample({'Titles': self.TITLES, 'Processes': rows}, previous)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py", line 212, in process_sample
+    process['cpu_interval'] = interval_cpu(process['pid'], times, previous_procs, previous_at, at)
+                              ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py", line 179, in interval_cpu
+    if isinstance(old, list) and len(old) == 2 and old[0] == start and ticks >= old[1]:
+                                                                       ^^^^^^^^^^^^^^^
+TypeError: '>=' not supported between instances of 'int' and 'str'
+
+======================================================================
+ERROR: test_pid_must_be_ascii_digits_and_1024_is_within_budget (test_container_probe.ProcessCpuIntervalTests.test_pid_must_be_ascii_digits_and_1024_is_within_budget) (pid='١٢')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 670, in test_pid_must_be_ascii_digits_and_1024_is_within_budget
+    self.assertEqual(processes[0]['cpu_fallback'], 'proc_unreadable')
+                     ~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+KeyError: 'cpu_fallback'
+
+======================================================================
+ERROR: test_scn004_name_mismatch_means_another_pid_namespace (test_container_probe.ProcessCpuIntervalTests.test_scn004_name_mismatch_means_another_pid_namespace)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 625, in test_scn004_name_mismatch_means_another_pid_namespace
+    self.assertEqual({p['cpu_fallback'] for p in processes}, {'proc_unreadable'})
+                      ~^^^^^^^^^^^^^^^^
+KeyError: 'cpu_fallback'
+
+======================================================================
+FAIL: test_equal_interval_ranks_by_lifetime_average (test_container_probe.ProcessCpuIntervalTests.test_equal_interval_ranks_by_lifetime_average)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 663, in test_equal_interval_ranks_by_lifetime_average
+    self.assertEqual([p['pid'] for p in processes], ['20', '10', '40', '30'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['10', '20', '30', '40'] != ['20', '10', '40', '30']
+
+First differing element 0:
+'10'
+'20'
+
+- ['10', '20', '30', '40']
++ ['20', '10', '40', '30']
+
+======================================================================
+FAIL: test_scn003_new_process_needs_one_second_of_life (test_container_probe.ProcessCpuIntervalTests.test_scn003_new_process_needs_one_second_of_life)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 646, in test_scn003_new_process_needs_one_second_of_life
+    self.assertEqual({p['pid']: p['cpu_interval'] for p in processes}, {'40': None, '41': 50.0, '42': 50.0})
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'40': 100.0, '41': 50.0, '42': 50.0} != {'40': None, '41': 50.0, '42': 50.0}
+- {'40': 100.0, '41': 50.0, '42': 50.0}
+?        ^^^^^
+
++ {'40': None, '41': 50.0, '42': 50.0}
+?        ^^^^
+
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.020s
+
+FAILED (failures=2, errors=3)

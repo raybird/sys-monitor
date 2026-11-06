@@ -1,0 +1,33 @@
+.......EE...
+======================================================================
+ERROR: test_damaged_fallback_value_does_not_break_the_detail (test_freeze_watch.ProcessCpuIntervalDetailTests.test_damaged_fallback_value_does_not_break_the_detail) (damaged=['x'])
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 487, in test_damaged_fallback_value_does_not_break_the_detail
+    text = self.detail([dict(pid='5', state='R', cpu=4.0, memory=1.0, name='w', cpu_interval=None, cpu_fallback=damaged)])
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 464, in detail
+    return freeze_watch.container_detail({'process_sample': json.dumps(processes), 'process_status': 'ok'}, [])
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kevin/Documents/RCodes/sys-monitor/src/freeze_watch.py", line 897, in container_detail
+    reason = {'no_previous': '尚無前一筆可算區間值', 'over_budget': '超過讀取預算', 'proc_unreadable': '無法讀取 /proc'}.get(fallback, fallback)
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+TypeError: cannot use 'list' as a dict key (unhashable type: 'list')
+
+======================================================================
+ERROR: test_damaged_fallback_value_does_not_break_the_detail (test_freeze_watch.ProcessCpuIntervalDetailTests.test_damaged_fallback_value_does_not_break_the_detail) (damaged={'a': 1})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 487, in test_damaged_fallback_value_does_not_break_the_detail
+    text = self.detail([dict(pid='5', state='R', cpu=4.0, memory=1.0, name='w', cpu_interval=None, cpu_fallback=damaged)])
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 464, in detail
+    return freeze_watch.container_detail({'process_sample': json.dumps(processes), 'process_status': 'ok'}, [])
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kevin/Documents/RCodes/sys-monitor/src/freeze_watch.py", line 897, in container_detail
+    reason = {'no_previous': '尚無前一筆可算區間值', 'over_budget': '超過讀取預算', 'proc_unreadable': '無法讀取 /proc'}.get(fallback, fallback)
+             ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+TypeError: cannot use 'dict' as a dict key (unhashable type: 'dict')
+
+----------------------------------------------------------------------
+Ran 11 tests in 0.008s
+
+FAILED (errors=2)

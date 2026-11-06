@@ -480,6 +480,13 @@ class ProcessCpuIntervalDetailTests(unittest.TestCase):
                 self.assertIn(label, text)
                 self.assertIn('CPU 區間 未知（平均 4.0%）', text)
 
+    def test_damaged_fallback_value_does_not_break_the_detail(self):
+        # review-02eda4b S1: a tampered row must not raise out of the refresh callback.
+        for damaged in (['x'], {'a': 1}, 3):
+            with self.subTest(damaged=damaged):
+                text = self.detail([dict(pid='5', state='R', cpu=4.0, memory=1.0, name='w', cpu_interval=None, cpu_fallback=damaged)])
+                self.assertIn('PID 5', text)
+
     def test_scn005_old_rows_keep_the_old_wording(self):
         text = self.detail([dict(pid='5', state='R', cpu=4.0, memory=1.0, name='w')])
         self.assertIn('PID 5 · R · CPU 4.0% · RAM 1.0% · w', text)

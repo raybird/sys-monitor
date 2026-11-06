@@ -25,6 +25,6 @@
      - 更新 `README.md`、`README.zh-TW.md`、`docs/architecture.md` 的口徑說明。
    - 驗證：對照組的區間 CPU 接近預期；`env -u DISPLAY -u WAYLAND_DISPLAY bash scripts/check.sh` 全過、沒有跳過。
    - 完成判準：對照組數值、查詢方式與文件更新都記錄在本檔或 evidence.md。
-   - 證據：紅綠燈、突變、主機對照組、真實 Docker 唯讀採樣與 check.sh 139 個測試 OK，見 evidence.md。
+   - 證據：紅綠燈、突變、主機對照組、真實 Docker 唯讀採樣與 check.sh 全過，見 evidence.md；review-02eda4b 的修正後為 147 個測試 OK。
 5. 📝 **交付**（全部 Scenario，依賴 1～4）
    - 本地獨立審查，報告存於本目錄；通過後依使用者指示合併。

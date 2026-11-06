@@ -892,7 +892,7 @@ def container_detail(row: dict[str, str], metrics: list[dict[str, str]]) -> str:
     except (ValueError, TypeError, KeyError, AttributeError):
         processes, process_lines = [], [f"程序：未知（{descriptions.get(status, status)}）"]
     # Rows before issue 4 carry no cpu_interval and were ranked by the ps lifetime average.
-    fallback = next((p.get('cpu_fallback') for p in processes if isinstance(p, dict) and p.get('cpu_fallback')), None)
+    fallback = next((p['cpu_fallback'] for p in processes if isinstance(p, dict) and isinstance(p.get('cpu_fallback'), str)), None)
     if fallback:
         reason = {'no_previous': '尚無前一筆可算區間值', 'over_budget': '超過讀取預算', 'proc_unreadable': '無法讀取 /proc'}.get(fallback, fallback)
         ranking = f'程序依生命週期平均排序（{reason}）'

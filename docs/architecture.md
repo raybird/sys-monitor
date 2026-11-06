@@ -196,12 +196,17 @@ helper reads `/proc/<pid>/stat` on the host for the PIDs Docker top returned
 previous deep sample by `SC_CLK_TCK` and by the elapsed `CLOCK_BOOTTIME`
 seconds; 100% means one core. A PID whose starttime changed is a new process,
 and a process started after the previous reading is measured over its own
-life. Each entry keeps the ps lifetime `cpu` and adds `cpu_interval` (null when
+life once it has lived a second (unknown before that). Ties and unknown
+intervals rank by the lifetime average. Each entry keeps the ps lifetime `cpu` and adds `cpu_interval` (null when
 unknown). The whole container falls back to the lifetime ranking, with
 `cpu_fallback` naming why on every entry, when there is no previous reading
 (`no_previous`: first deep sample, collector restart, cache loss or a clock
 that did not advance), when it has more than 1024 processes or reading takes
-over 0.2 s (`over_budget`), or when `/proc` cannot be read (`proc_unreadable`).
+over 0.2 s (`over_budget`), or when `/proc` cannot be read or a PID is not
+ASCII digits (`proc_unreadable`). `proc_unreadable` also covers a comm in
+`/proc/<pid>/stat` that is not a prefix of Docker top's name: the daemon then
+sees another PID namespace (Docker in a VM, for example), and its PIDs would
+name unrelated host processes.
 Memory percentage is relative to host RAM. Container CPU is a delta of total CPU/system counters
 multiplied by online CPU count: 100% means one core. Container memory uses
 raw usage and limit (including cache, unlike the Docker CLI's adjusted view).
@@ -218,8 +223,10 @@ must advance. A missing sample resets the baseline. Listing failure, outer helpe
 `docker-counters.json` cache stores counters/identity and, for containers
 deep-sampled this round, `[starttime, ticks]` per live PID with the reading
 time; it holds no process names or arguments, and a container not deep-sampled
-this round loses its readings, so with more than 8 tracked running containers
-the rotation makes each one start again from `no_previous`.
+this round loses its readings. With more than 8 tracked running containers the
+deep cursor advances 8 per round, so only the containers deep-sampled in two
+consecutive rounds have interval CPU: max(0, 16 - N) of the 8 for N tracked
+running containers, none from 16 on; the rest show `no_previous`.
 
 Evidence is appended to `docker-*.tsv` after the original 11 fields, including
 ID, Compose project/service, health, bytes/rates, D count, bounded JSON process

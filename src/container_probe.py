@@ -6,6 +6,7 @@ import csv
 from datetime import datetime
 import http.client
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -144,17 +145,18 @@ def boot_seconds() -> float:
     return time.clock_gettime(time.CLOCK_BOOTTIME)
 
 
-def read_proc_times(pids: list[str]) -> tuple[dict[str, list[int]], str | None]:
+def read_proc_times(processes: list[dict]) -> tuple[dict[str, list[int]], str | None]:
     """[starttime, utime+stime] in ticks per PID, or the reason none are usable."""
-    if len(pids) > MAX_PROC_READS:
+    if len(processes) > MAX_PROC_READS:
         return {}, 'over_budget'
     started = time.monotonic()
     times = {}
-    for pid in pids:
+    for process in processes:
+        pid = process['pid']
         if time.monotonic() - started > PROC_BUDGET_SECONDS:
             return {}, 'over_budget'
         try:
-            if not pid.isdigit():
+            if not (pid.isascii() and pid.isdigit()):
                 raise ValueError('pid')
             data = (PROC_ROOT / pid / 'stat').read_bytes()
         except FileNotFoundError:
@@ -163,9 +165,14 @@ def read_proc_times(pids: list[str]) -> tuple[dict[str, list[int]], str | None]:
             return {}, 'proc_unreadable'
         try:
             # The comm may hold spaces and parentheses; fields resume after the last ')'.
+            comm = data[data.index(b'(') + 1:data.rindex(b')')].decode('utf-8', 'replace')
             fields = data[data.rindex(b')') + 2:].split()
             times[pid] = [int(fields[19]), int(fields[11]) + int(fields[12])]
         except (ValueError, IndexError):
+            return {}, 'proc_unreadable'
+        # Top's name starts with the kernel's 15-byte comm when both see the same
+        # process; otherwise top uses another PID namespace, such as Docker in a VM.
+        if not process['name'].startswith(comm):
             return {}, 'proc_unreadable'
     return times, None
 
@@ -176,12 +183,13 @@ def interval_cpu(pid: str, times: dict, previous: dict, previous_at: float, at: 
         return None
     start, ticks = times[pid]
     old = previous.get(pid)
-    if isinstance(old, list) and len(old) == 2 and old[0] == start and ticks >= old[1]:
+    if isinstance(old, list) and len(old) == 2 and old[0] == start and isinstance(old[1], int) and ticks >= old[1]:
         return round((ticks - old[1]) / CLK_TCK / (at - previous_at) * 100, 1)
     # Same PID with another starttime is a new process; one started after the
-    # previous reading is measured over its own life.
+    # previous reading is measured over its own life, once it has lived a
+    # second; younger, its first tick alone would read as a busy core.
     born = start / CLK_TCK
-    if previous_at <= born < at:
+    if previous_at <= born and at - born >= 1:
         return round(ticks / CLK_TCK / (at - born) * 100, 1)
     return None
 
@@ -197,23 +205,22 @@ def process_sample(data: dict, previous: dict | None = None) -> tuple[list[dict]
         pid, state, cpu, memory, name = (row[i] for i in positions)
         # comm is requested, never args; control characters cannot break the TSV.
         processes.append(dict(pid=pid, state=state, cpu=float(cpu), memory=float(memory), name=name[:80]))
-    times, fallback = read_proc_times([p['pid'] for p in processes])
+    times, fallback = read_proc_times(processes)
     at = boot_seconds()
     snapshot = None if fallback else {'at': at, 'procs': times}
     previous = previous if isinstance(previous, dict) else {}
     previous_at, previous_procs = previous.get('at'), previous.get('procs')
-    if fallback is None and (not isinstance(previous_at, (int, float)) or not isinstance(previous_procs, dict)
-                             or at <= previous_at):
+    if fallback is None and (not isinstance(previous_at, (int, float)) or not math.isfinite(previous_at)
+                             or not isinstance(previous_procs, dict) or at <= previous_at):
         fallback = 'no_previous'
     for process in processes:
         if fallback:
             process.update(cpu_interval=None, cpu_fallback=fallback)
         else:
             process['cpu_interval'] = interval_cpu(process['pid'], times, previous_procs, previous_at, at)
-    if fallback:
-        rank = lambda p: p['cpu']
-    else:
-        rank = lambda p: -1 if p['cpu_interval'] is None else p['cpu_interval']
+    # Ties and unknown intervals rank by the lifetime average, so a container
+    # that fell back ranks wholly by it.
+    rank = lambda p: (-1 if p['cpu_interval'] is None else p['cpu_interval'], p['cpu'])
     selected = {}
     groups = [sorted(processes, key=rank, reverse=True)[:5],
               sorted(processes, key=lambda p: p['memory'], reverse=True)[:5],
