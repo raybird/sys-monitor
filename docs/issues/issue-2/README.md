@@ -176,6 +176,19 @@ Feature: 容器內部負載與當機前歷史對照
 | 2026-11-06 | 不以 PR #3 做交付審查，改依 project.md 由獨立 reviewer 在本地審查 | 照你的建議處理 D1、M3、S3、S7 | 合併沒有平台審查紀錄；PR #3 上的審查留言只對應 1e33e63 |
 | 2026-11-06 | 不量測真實高負載下的採樣成本 | 照你的建議處理 D1、M3、S3、S7 | 高負載時 helper 的實際耗時未知。目前只有閒置 8 個容器實測 0.21 秒；外層 8 秒硬上限保護主機採樣。合併後在下一次 runwukong／runtelenexus 高負載時段，觀察容器樣本是否出現 unavailable 或逾時 |
 
+## 外部驗收窗
+
+高負載採樣成本已豁免實測（見 Gate 豁免紀錄），合併後改在真實高負載時段觀察。窗口前的工作已完成：第三輪審查 PASS（[review-a7c2c36.md](review-a7c2c36.md)），main 上 check.sh 126 個測試 OK。
+
+- **起點**：本機安裝 main 版本並重啟 freeze-monitor.service 之後。2026-11-06 確認本機安裝的仍是舊版，還沒有 `container_probe.py`。
+- **觸發事件**：安裝後 runwukong 或 runtelenexus 第一次出現高負載時段，也就是 events.log 出現主機 WARN（壓力、記憶體、D 狀態）或 UNCLEAN、FREEZE 事故。最晚到 2026-11-20 仍沒有觸發，就以安裝後這段期間 CPU 最高的 30 分鐘為窗口照樣判定。
+- **判準**（窗口內追蹤 project 的資料）：
+  1. metrics 的 `docker_state`：`unavailable:timeout` 為 0 筆，`partial` 不超過該時段 Docker 採樣的 5%。
+  2. docker TSV 的列：`sample_status=unavailable_or_timeout` 的列不超過追蹤容器列的 5%。
+  3. 主機 metrics 在窗口內沒有因 Docker 採樣而出現大於 45 秒的缺口。
+- **反向自檢**：每個容器 0.5 秒逾時只會落在列層級的 `unavailable_or_timeout`，`docker_state` 可能仍是 ok。所以判準 2 必須逐列計算，不能只看判準 1。計算前先拿 `docs/issues/issue-2/artifacts/qa/` 的 QA 資料或手造已知筆數的 TSV 當對照組，確認查詢算得出已知的 partial 與 unavailable 筆數，再記錄查詢原文、時間範圍與實際數值。
+- **未達標時**：開新 issue 調整採樣預算，例如深度採樣數量或逾時時間。本 issue 不重開。
+
 ## Timeline
 
 | 日期 | 異動 | 負責人 |
@@ -186,9 +199,10 @@ Feature: 容器內部負載與當機前歷史對照
 | 2026-11-06 | 使用者核准全部 Scenario，並決定審查建議 S2、S4、S5、S6、S8、S9、N1～N8 一起修 | - |
 | 2026-11-06 | 整合後完整範圍審查 f1b9bfa，判定 RETURN TO execute-task（[review-f1b9bfa.md](review-f1b9bfa.md)）；使用者決定依建議修正，SCN-006、007 規格修訂 | - |
 | 2026-11-06 | 第三輪完整範圍審查 a7c2c36，判定 PASS（[review-a7c2c36.md](review-a7c2c36.md)） | - |
+| 2026-11-06 | 使用者要求合併並開後續 issue。fast-forward 合併 30c80d6 到 main，合併後 check.sh 126 個測試 OK；審查剩餘建議 S1、N2～N5 移到 #5，N1 維持現狀並記錄於 #5 | 使用者／開發助理 |
 
 ---
 **建立日期**: 2026-11-06  
 **分級**: Medium  
 **風險**: Medium\
-**狀態**: 待合併
+**狀態**: 等待外部驗收窗（2026-11-06 fast-forward 合併到 main；高負載採樣成本待觀察，見「外部驗收窗」）
