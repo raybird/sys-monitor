@@ -1,0 +1,41 @@
+FF..FE
+======================================================================
+ERROR: test_untracked_containers_are_never_flagged (test_freeze_watch.ContainerBackwardCompatibilityTests.test_untracked_containers_are_never_flagged)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 454, in test_untracked_containers_are_never_flagged
+    self.assertFalse(freeze_watch.container_warning(row, {'is_tracked_project': '0', 'restart_count': '1'}))
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: container_warning() takes 1 positional argument but 2 were given
+
+======================================================================
+FAIL: test_events_follow_tracked_restart_increase_and_dstate_threshold (test_container_probe.ContainerAlertTests.test_events_follow_tracked_restart_increase_and_dstate_threshold)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 160, in test_events_follow_tracked_restart_increase_and_dstate_threshold
+    self.assertEqual(len(alerts), 2, alerts)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 3 != 2 : ['2026-11-06T12:02:31+08:00\tWARN\tDocker anomaly: worker:oom=false,restarts=1,Z=0,D=0,health=healthy;db:oom=false,restarts=0,Z=0,D=8,health=healthy;shallow:oom=false,restarts=0,Z=0,D=7,health=healthy;portainer:oom=true,restarts=9,Z=0,D=9,health=healthy;', '2026-11-06T12:02:34+08:00\tWARN\tDocker anomaly: worker:oom=false,restarts=1,Z=0,D=0,health=healthy;db:oom=false,restarts=0,Z=0,D=9,health=healthy;shallow:oom=false,restarts=0,Z=0,D=7,health=healthy;portainer:oom=true,restarts=9,Z=0,D=9,health=healthy;', '2026-11-06T12:02:37+08:00\tWARN\tDocker anomaly: worker:oom=false,restarts=2,Z=0,D=0,health=healthy;db:oom=false,restarts=0,Z=0,D=10,health=healthy;shallow:oom=false,restarts=0,Z=0,D=7,health=healthy;portainer:oom=true,restarts=9,Z=0,D=9,health=healthy;']
+
+======================================================================
+FAIL: test_dstate_uses_host_elevated_threshold (test_freeze_watch.ContainerBackwardCompatibilityTests.test_dstate_uses_host_elevated_threshold)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 449, in test_dstate_uses_host_elevated_threshold
+    self.assertFalse(freeze_watch.container_warning({'is_tracked_project': '1', 'dstate': '3'}))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_restart_flags_only_an_increase_over_previous_sample (test_freeze_watch.ContainerBackwardCompatibilityTests.test_restart_flags_only_an_increase_over_previous_sample)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 458, in test_restart_flags_only_an_increase_over_previous_sample
+    self.assertFalse(freeze_watch.container_warning(row))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 6 tests in 6.629s
+
+FAILED (failures=3, errors=1)

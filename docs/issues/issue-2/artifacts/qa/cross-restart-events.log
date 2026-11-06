@@ -1,0 +1,9 @@
+2026-11-06T12:06:41+08:00	INFO	kernel log unavailable; add this user to the adm or systemd-journal group
+2026-11-06T12:06:41+08:00	START	boot=00000000-qa-previous-boot metrics=/tmp/claude-1000/-home-kevin-Documents-RCodes-sys-monitor/b36fa669-5f24-42eb-b737-f2408f4b7919/scratchpad/qa/root/freeze-monitor/metrics-2026-11-06T12-06-41+08-00-4e08f1f0.tsv interval=1s flush=3s
+2026-11-06T12:06:41+08:00	INFO	Docker monitor state: ok
+2026-11-06T12:06:44+08:00	WARN	Docker anomaly: runwukong-schedulerd-1:oom=false,restarts=2(new),Z=0,D>=8=no,health=healthy;
+2026-11-06T12:06:51+08:00	UNCLEAN	previous session ended without STOP; boot_changed=yes cause=unknown (power loss, forced reboot or freeze); last_sample=2026-11-06T12:06:48+08:00 silent_for=3s metrics=/tmp/claude-1000/-home-kevin-Documents-RCodes-sys-monitor/b36fa669-5f24-42eb-b737-f2408f4b7919/scratchpad/qa/root/freeze-monitor/metrics-2026-11-06T12-06-41+08-00-4e08f1f0.tsv
+2026-11-06T12:06:51+08:00	INFO	kernel log unavailable; add this user to the adm or systemd-journal group
+2026-11-06T12:06:51+08:00	START	boot=4e08f1f0-28a8-4051-96a9-3f5f397545b8 metrics=/tmp/claude-1000/-home-kevin-Documents-RCodes-sys-monitor/b36fa669-5f24-42eb-b737-f2408f4b7919/scratchpad/qa/root/freeze-monitor/metrics-2026-11-06T12-06-51+08-00-4e08f1f0.tsv interval=1s flush=3s
+2026-11-06T12:06:51+08:00	INFO	Docker monitor state: ok
+2026-11-06T12:06:54+08:00	STOP	monitor stopped
