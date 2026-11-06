@@ -172,7 +172,10 @@ def read_proc_times(processes: list[dict]) -> tuple[dict[str, list[int]], str | 
             return {}, 'proc_unreadable'
         # Top's name starts with the kernel's 15-byte comm when both see the same
         # process; otherwise top uses another PID namespace, such as Docker in a VM.
-        if not process['name'].startswith(comm):
+        # ps rewrites non-ASCII, control characters and runs of spaces, so only
+        # plain names are compared.
+        plain = comm.isascii() and comm.isprintable() and comm == ' '.join(comm.split())
+        if plain and not process['name'].startswith(comm):
             return {}, 'proc_unreadable'
     return times, None
 
@@ -210,7 +213,7 @@ def process_sample(data: dict, previous: dict | None = None) -> tuple[list[dict]
     snapshot = None if fallback else {'at': at, 'procs': times}
     previous = previous if isinstance(previous, dict) else {}
     previous_at, previous_procs = previous.get('at'), previous.get('procs')
-    if fallback is None and (not isinstance(previous_at, (int, float)) or not math.isfinite(previous_at)
+    if fallback is None and (not isinstance(previous_at, float) or not math.isfinite(previous_at)
                              or not isinstance(previous_procs, dict) or at <= previous_at):
         fallback = 'no_previous'
     for process in processes:

@@ -6,3 +6,6 @@ cache: 6 containers with procs, 15 processes
 # 2026-11-06 審查修正後（名稱比對）再跑兩輪，間隔約 10 秒
 fix round1 exit=0 state=ok 0.097s tracked_processes_by_basis={'no_previous': 15}
 fix round2 exit=0 state=ok 0.108s tracked_processes_by_basis={'interval': 15}
+# 2026-11-06 第二輪審查修正後（只比對單純 ASCII 名稱）再跑兩輪，間隔約 10 秒
+fix2 round1 exit=0 state=ok 0.101s tracked_processes_by_basis={'no_previous': 15}
+fix2 round2 exit=0 state=ok 0.104s tracked_processes_by_basis={'interval': 15}

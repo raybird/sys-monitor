@@ -197,7 +197,7 @@ previous deep sample by `SC_CLK_TCK` and by the elapsed `CLOCK_BOOTTIME`
 seconds; 100% means one core. A PID whose starttime changed is a new process,
 and a process started after the previous reading is measured over its own
 life once it has lived a second (unknown before that). Ties and unknown
-intervals rank by the lifetime average. Each entry keeps the ps lifetime `cpu` and adds `cpu_interval` (null when
+intervals (which rank after every known one) rank by the lifetime average. Each entry keeps the ps lifetime `cpu` and adds `cpu_interval` (null when
 unknown). The whole container falls back to the lifetime ranking, with
 `cpu_fallback` naming why on every entry, when there is no previous reading
 (`no_previous`: first deep sample, collector restart, cache loss or a clock
@@ -205,8 +205,11 @@ that did not advance), when it has more than 1024 processes or reading takes
 over 0.2 s (`over_budget`), or when `/proc` cannot be read or a PID is not
 ASCII digits (`proc_unreadable`). `proc_unreadable` also covers a comm in
 `/proc/<pid>/stat` that is not a prefix of Docker top's name: the daemon then
-sees another PID namespace (Docker in a VM, for example), and its PIDs would
-name unrelated host processes.
+likely sees another PID namespace (Docker in a VM, for example), and its PIDs
+would name unrelated host processes. Only printable-ASCII comms without
+leading, trailing or repeated spaces are compared, since ps rewrites the others
+(`?` for non-ASCII under a C locale or for control characters, collapsed
+spaces, a cut multibyte character).
 Memory percentage is relative to host RAM. Container CPU is a delta of total CPU/system counters
 multiplied by online CPU count: 100% means one core. Container memory uses
 raw usage and limit (including cache, unlike the Docker CLI's adjusted view).

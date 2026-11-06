@@ -627,6 +627,25 @@ class ProcessCpuIntervalTests(unittest.TestCase):
         self.assertEqual([p['pid'] for p in processes], ['10', '20'])
         self.assertIsNone(snapshot)
 
+    def test_mismatch_sharing_the_first_letter_still_falls_back(self):
+        # review-ef3c759 N1.
+        self.stat(10, 100, 0, 100, 'nginx')
+        processes, _, _, _, snapshot = self.sample([['10', 'S', '1', '1', 'node']], {'at': 1000.0, 'procs': {'10': [100, 0]}}, 1010.0)
+        self.assertEqual(processes[0]['cpu_fallback'], 'proc_unreadable')
+        self.assertIsNone(snapshot)
+
+    def test_names_ps_rewrites_are_not_compared(self):
+        # review-ef3c759 S1 (2026-11-06, SCN-004): ps shows these kernel comms
+        # differently (procps-ng 4.0.4 output on the right), so they are skipped.
+        shown = {'睡眠工作': '????????????', 'café': 'caf??', 'a  b': 'a b', ' lead': 'lead',
+                 'abcdefghijklmn ': 'abcdefghijklmn', 'x\tz': 'x?z'}
+        for pid, (comm, name) in enumerate(shown.items(), start=10):
+            with self.subTest(comm=comm):
+                self.stat(pid, 300, 0, 100, comm)
+                processes, _, _, _, _ = self.sample([[str(pid), 'S', '1', '1', name]], {'at': 1000.0, 'procs': {str(pid): [100, 100]}}, 1010.0)
+                self.assertNotIn('cpu_fallback', processes[0])
+                self.assertEqual(processes[0]['cpu_interval'], 20.0)
+
     def test_kernel_comm_is_a_prefix_of_the_top_name(self):
         # The kernel keeps 15 bytes of the name; ps marks a zombie with " <defunct>".
         rows = [['10', 'S', '1', '1', 'very-long-process-name'], ['20', 'Z', '0', '0', 'node <defunct>']]
@@ -683,7 +702,7 @@ class ProcessCpuIntervalTests(unittest.TestCase):
         previous = {'at': 1000.0, 'procs': {'10': [100, 'x'], '20': [100, None], '30': [100, 100]}}
         processes, _, _, _, _ = self.sample(rows, previous, 1010.0)
         self.assertEqual({p['pid']: p['cpu_interval'] for p in processes}, {'10': None, '20': None, '30': 20.0})
-        for at in (float('nan'), float('inf')):
+        for at in (float('nan'), float('inf'), 10 ** 400):
             with self.subTest(at=at):
                 processes, _, _, _, _ = self.sample(rows, {'at': at, 'procs': {'30': [100, 100]}}, 1010.0)
                 self.assertEqual({p['cpu_fallback'] for p in processes}, {'no_previous'})

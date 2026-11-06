@@ -21,6 +21,8 @@ test_comm_with_parentheses_and_spaces_is_parsed (test_container_probe.ProcessCpu
 test_damaged_cache_only_loses_the_damaged_entries (test_container_probe.ProcessCpuIntervalTests.test_damaged_cache_only_loses_the_damaged_entries) ... ok
 test_equal_interval_ranks_by_lifetime_average (test_container_probe.ProcessCpuIntervalTests.test_equal_interval_ranks_by_lifetime_average) ... ok
 test_kernel_comm_is_a_prefix_of_the_top_name (test_container_probe.ProcessCpuIntervalTests.test_kernel_comm_is_a_prefix_of_the_top_name) ... ok
+test_mismatch_sharing_the_first_letter_still_falls_back (test_container_probe.ProcessCpuIntervalTests.test_mismatch_sharing_the_first_letter_still_falls_back) ... ok
+test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) ... ok
 test_pid_must_be_ascii_digits_and_1024_is_within_budget (test_container_probe.ProcessCpuIntervalTests.test_pid_must_be_ascii_digits_and_1024_is_within_budget) ... ok
 test_process_gone_before_read_and_clock_not_moving_forward (test_container_probe.ProcessCpuIntervalTests.test_process_gone_before_read_and_clock_not_moving_forward) ... ok
 test_scn001_spiking_long_lived_process_ranks_first_by_interval (test_container_probe.ProcessCpuIntervalTests.test_scn001_spiking_long_lived_process_ranks_first_by_interval) ... ok
@@ -167,10 +169,10 @@ test_n8_open_history_menu_is_detected_so_refresh_defers_rebuild (test_window_lay
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+
+(process:3053378): Gtk-CRITICAL **: 17:38:48.350: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
-
-(process:2974927): Gtk-CRITICAL **: 17:25:10.160: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
@@ -206,8 +208,6 @@ test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.Dropdo
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
-/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
-  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 /home/kevin/Documents/RCodes/sys-monitor/tests/test_window_layout.py:295: DeprecationWarning: Gtk.Widget.get_style_context is deprecated
   Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
 /home/kevin/Documents/RCodes/sys-monitor/tests/test_window_layout.py:295: DeprecationWarning: Gtk.render_background is deprecated
@@ -219,7 +219,7 @@ test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.Dropdo
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 
-(process:2974927): Gtk-CRITICAL **: 17:25:10.206: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
+(process:3053378): Gtk-CRITICAL **: 17:38:48.414: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
@@ -239,7 +239,7 @@ test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.Dropdo
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 
-(process:2974927): Gtk-CRITICAL **: 17:25:10.230: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
+(process:3053378): Gtk-CRITICAL **: 17:38:48.442: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
@@ -259,7 +259,7 @@ test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.Dropdo
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 
-(process:2974927): Gtk-CRITICAL **: 17:25:10.254: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
+(process:3053378): Gtk-CRITICAL **: 17:38:48.469: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
   if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
 /usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
@@ -291,53 +291,53 @@ test_puts_the_position_back (test_window_layout.ScrollRestoreTests.test_puts_the
 test_stops_running_after_one_pass (test_window_layout.ScrollRestoreTests.test_stops_running_after_one_pass) ... ok
 
 ----------------------------------------------------------------------
-Ran 147 tests in 90.096s
+Ran 149 tests in 90.185s
 
 OK
 
-Note: /tmp/tmp.NsrSAKrqgp/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
+Note: /tmp/tmp.69yWbGLOPZ/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
 
 Freeze Watch 0.8.0 installed.
 
 Python:    /usr/bin/python3
-Collector: /tmp/tmp.NsrSAKrqgp/home/.local/bin/freeze-monitor
-Dashboard: /tmp/tmp.NsrSAKrqgp/home/.local/bin/freeze-watch
-State:     /tmp/tmp.NsrSAKrqgp/home/.local/state/freeze-monitor
-Config:    /tmp/tmp.NsrSAKrqgp/home/.config/freeze-watch/env
-Uninstall: /tmp/tmp.NsrSAKrqgp/home/.local/share/freeze-watch/uninstall.sh
+Collector: /tmp/tmp.69yWbGLOPZ/home/.local/bin/freeze-monitor
+Dashboard: /tmp/tmp.69yWbGLOPZ/home/.local/bin/freeze-watch
+State:     /tmp/tmp.69yWbGLOPZ/home/.local/state/freeze-monitor
+Config:    /tmp/tmp.69yWbGLOPZ/home/.config/freeze-watch/env
+Uninstall: /tmp/tmp.69yWbGLOPZ/home/.local/share/freeze-watch/uninstall.sh
 /usr/lib/systemd/user/spice-vdagent.service:23: Unknown key 'StandardError' in section [Install], ignoring.
 
-Note: /tmp/tmp.NsrSAKrqgp/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
+Note: /tmp/tmp.69yWbGLOPZ/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
 
 Freeze Watch 0.8.0 installed.
 
 Python:    /usr/bin/python3
-Collector: /tmp/tmp.NsrSAKrqgp/home/.local/bin/freeze-monitor
-Dashboard: /tmp/tmp.NsrSAKrqgp/home/.local/bin/freeze-watch
-State:     /tmp/tmp.NsrSAKrqgp/home/.local/state/freeze-monitor
-Config:    /tmp/tmp.NsrSAKrqgp/home/.config/freeze-watch/env
-Uninstall: /tmp/tmp.NsrSAKrqgp/home/.local/share/freeze-watch/uninstall.sh
+Collector: /tmp/tmp.69yWbGLOPZ/home/.local/bin/freeze-monitor
+Dashboard: /tmp/tmp.69yWbGLOPZ/home/.local/bin/freeze-watch
+State:     /tmp/tmp.69yWbGLOPZ/home/.local/state/freeze-monitor
+Config:    /tmp/tmp.69yWbGLOPZ/home/.config/freeze-watch/env
+Uninstall: /tmp/tmp.69yWbGLOPZ/home/.local/share/freeze-watch/uninstall.sh
 
-Note: /tmp/tmp.NsrSAKrqgp/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
-
-Freeze Watch 0.8.0 installed.
-
-Python:    /usr/bin/python3
-Collector: /tmp/tmp.NsrSAKrqgp/home/.local/bin/freeze-monitor
-Dashboard: /tmp/tmp.NsrSAKrqgp/home/.local/bin/freeze-watch
-State:     /tmp/tmp.NsrSAKrqgp/home/.local/state/freeze-monitor
-Config:    /tmp/tmp.NsrSAKrqgp/home/.config/freeze-watch/env
-Uninstall: /tmp/tmp.NsrSAKrqgp/home/.local/share/freeze-watch/uninstall.sh
-
-Note: /tmp/tmp.NsrSAKrqgp/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
+Note: /tmp/tmp.69yWbGLOPZ/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
 
 Freeze Watch 0.8.0 installed.
 
 Python:    /usr/bin/python3
-Collector: /tmp/tmp.NsrSAKrqgp/home/.local/bin/freeze-monitor
-Dashboard: /tmp/tmp.NsrSAKrqgp/home/.local/bin/freeze-watch
-State:     /tmp/tmp.NsrSAKrqgp/home/.local/state/freeze-monitor
-Config:    /tmp/tmp.NsrSAKrqgp/home/.config/freeze-watch/env
-Uninstall: /tmp/tmp.NsrSAKrqgp/home/.local/share/freeze-watch/uninstall.sh
+Collector: /tmp/tmp.69yWbGLOPZ/home/.local/bin/freeze-monitor
+Dashboard: /tmp/tmp.69yWbGLOPZ/home/.local/bin/freeze-watch
+State:     /tmp/tmp.69yWbGLOPZ/home/.local/state/freeze-monitor
+Config:    /tmp/tmp.69yWbGLOPZ/home/.config/freeze-watch/env
+Uninstall: /tmp/tmp.69yWbGLOPZ/home/.local/share/freeze-watch/uninstall.sh
+
+Note: /tmp/tmp.69yWbGLOPZ/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
+
+Freeze Watch 0.8.0 installed.
+
+Python:    /usr/bin/python3
+Collector: /tmp/tmp.69yWbGLOPZ/home/.local/bin/freeze-monitor
+Dashboard: /tmp/tmp.69yWbGLOPZ/home/.local/bin/freeze-watch
+State:     /tmp/tmp.69yWbGLOPZ/home/.local/state/freeze-monitor
+Config:    /tmp/tmp.69yWbGLOPZ/home/.config/freeze-watch/env
+Uninstall: /tmp/tmp.69yWbGLOPZ/home/.local/share/freeze-watch/uninstall.sh
 Freeze Watch removed, including configuration and collected history.
 All checks passed.

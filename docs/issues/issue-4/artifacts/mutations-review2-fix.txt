@@ -1,0 +1,17 @@
+== nostart exit=1 failing=1: test_scn003_pid_reuse_new_and_exited_processes 
+== denominator exit=1 failing=12: test_comm_with_parentheses_and_spaces_is_parsed test_damaged_cache_only_loses_the_damaged_entries test_kernel_comm_is_a_prefix_of_the_top_name test_names_ps_rewrites_are_not_compared (comm='a  b') test_names_ps_rewrites_are_not_compared (comm='abcdefghijklmn ') test_names_ps_rewrites_are_not_compared (comm='café') test_names_ps_rewrites_are_not_compared (comm=' lead') test_names_ps_rewrites_are_not_compared (comm='x\tz') test_names_ps_rewrites_are_not_compared (comm='睡眠工作') test_process_gone_before_read_and_clock_not_moving_forward test_scn001_spiking_long_lived_process_ranks_first_by_interval test_scn005_collect_keeps_readings_of_live_deep_processes_only 
+== rank exit=1 failing=2: test_equal_interval_ranks_by_lifetime_average test_scn001_spiking_long_lived_process_ranks_first_by_interval 
+== lifetimekey exit=1 failing=6: test_equal_interval_ranks_by_lifetime_average test_scn002_without_previous_ranks_by_lifetime_and_says_why (previous={}) test_scn002_without_previous_ranks_by_lifetime_and_says_why (previous={'at': 1010.0, 'procs': {'10': [100, 50]}}) test_scn002_without_previous_ranks_by_lifetime_and_says_why (previous=None) test_scn004_name_mismatch_means_another_pid_namespace test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container 
+== namecheck exit=1 failing=2: test_mismatch_sharing_the_first_letter_still_falls_back test_scn004_name_mismatch_means_another_pid_namespace 
+== plainskip exit=1 failing=6: test_names_ps_rewrites_are_not_compared (comm='a  b') test_names_ps_rewrites_are_not_compared (comm='abcdefghijklmn ') test_names_ps_rewrites_are_not_compared (comm='café') test_names_ps_rewrites_are_not_compared (comm=' lead') test_names_ps_rewrites_are_not_compared (comm='x\tz') test_names_ps_rewrites_are_not_compared (comm='睡眠工作') 
+== firstchar exit=1 failing=1: test_mismatch_sharing_the_first_letter_still_falls_back 
+== isascii exit=1 failing=1: test_pid_must_be_ascii_digits_and_1024_is_within_budget (pid='١٢') 
+== count exit=1 failing=1: test_pid_must_be_ascii_digits_and_1024_is_within_budget 
+== onesecond exit=1 failing=1: test_scn003_new_process_needs_one_second_of_life 
+== borneq exit=1 failing=1: test_scn003_new_process_needs_one_second_of_life 
+== tickback exit=1 failing=1: test_ticks_going_backwards_are_unknown 
+== intcheck exit=1 failing=1: test_damaged_cache_only_loses_the_damaged_entries 
+== isfinite exit=1 failing=1: test_damaged_cache_only_loses_the_damaged_entries (at=nan) 
+== floatonly exit=1 failing=1: test_damaged_cache_only_loses_the_damaged_entries (at=10**400) 
+== dashstr exit=1 failing=2: test_damaged_fallback_value_does_not_break_the_detail (damaged={'a': 1}) test_damaged_fallback_value_does_not_break_the_detail (damaged=['x']) 
+== unmutated: OK

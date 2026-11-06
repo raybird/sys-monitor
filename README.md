@@ -226,8 +226,8 @@ two deep samples, read from the host's `/proc` (100% is one core), so a
 long-lived process that just spiked ranks first; the ps lifetime average is
 shown alongside; a process younger than one second shows an unknown interval.
 A container's first deep sample, or one with more than 1024 processes, a
-`/proc` read over 0.2 s, an unreadable `/proc` or process names in `/proc`
-that differ from Docker top's (as with Docker running in a VM), falls back to
+`/proc` read over 0.2 s, an unreadable `/proc` or plain ASCII process names in
+`/proc` that differ from Docker top's (as with Docker running in a VM), falls back to
 the lifetime ranking and says why. These are diagnostic clues, not proof of a
 freeze.
 

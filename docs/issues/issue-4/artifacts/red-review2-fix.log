@@ -1,0 +1,97 @@
+test_comm_with_parentheses_and_spaces_is_parsed (test_container_probe.ProcessCpuIntervalTests.test_comm_with_parentheses_and_spaces_is_parsed) ... ok
+test_damaged_cache_only_loses_the_damaged_entries (test_container_probe.ProcessCpuIntervalTests.test_damaged_cache_only_loses_the_damaged_entries) ... 
+  test_damaged_cache_only_loses_the_damaged_entries (test_container_probe.ProcessCpuIntervalTests.test_damaged_cache_only_loses_the_damaged_entries) (at=10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000) ... ERROR
+test_equal_interval_ranks_by_lifetime_average (test_container_probe.ProcessCpuIntervalTests.test_equal_interval_ranks_by_lifetime_average) ... ok
+test_kernel_comm_is_a_prefix_of_the_top_name (test_container_probe.ProcessCpuIntervalTests.test_kernel_comm_is_a_prefix_of_the_top_name) ... ok
+test_mismatch_sharing_the_first_letter_still_falls_back (test_container_probe.ProcessCpuIntervalTests.test_mismatch_sharing_the_first_letter_still_falls_back) ... ok
+test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) ... 
+  test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='睡眠工作') ... FAIL
+  test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='café') ... FAIL
+  test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='a  b') ... FAIL
+  test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm=' lead') ... FAIL
+  test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='abcdefghijklmn ') ... FAIL
+  test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='x\tz') ... FAIL
+test_pid_must_be_ascii_digits_and_1024_is_within_budget (test_container_probe.ProcessCpuIntervalTests.test_pid_must_be_ascii_digits_and_1024_is_within_budget) ... ok
+test_process_gone_before_read_and_clock_not_moving_forward (test_container_probe.ProcessCpuIntervalTests.test_process_gone_before_read_and_clock_not_moving_forward) ... ok
+test_scn001_spiking_long_lived_process_ranks_first_by_interval (test_container_probe.ProcessCpuIntervalTests.test_scn001_spiking_long_lived_process_ranks_first_by_interval) ... ok
+test_scn002_without_previous_ranks_by_lifetime_and_says_why (test_container_probe.ProcessCpuIntervalTests.test_scn002_without_previous_ranks_by_lifetime_and_says_why) ... ok
+test_scn003_new_process_needs_one_second_of_life (test_container_probe.ProcessCpuIntervalTests.test_scn003_new_process_needs_one_second_of_life) ... ok
+test_scn003_pid_reuse_new_and_exited_processes (test_container_probe.ProcessCpuIntervalTests.test_scn003_pid_reuse_new_and_exited_processes) ... ok
+test_scn004_name_mismatch_means_another_pid_namespace (test_container_probe.ProcessCpuIntervalTests.test_scn004_name_mismatch_means_another_pid_namespace) ... ok
+test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container (test_container_probe.ProcessCpuIntervalTests.test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container) ... ok
+test_scn005_collect_keeps_readings_of_live_deep_processes_only (test_container_probe.ProcessCpuIntervalTests.test_scn005_collect_keeps_readings_of_live_deep_processes_only) ... ok
+test_ticks_going_backwards_are_unknown (test_container_probe.ProcessCpuIntervalTests.test_ticks_going_backwards_are_unknown) ... ok
+
+======================================================================
+ERROR: test_damaged_cache_only_loses_the_damaged_entries (test_container_probe.ProcessCpuIntervalTests.test_damaged_cache_only_loses_the_damaged_entries) (at=10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 707, in test_damaged_cache_only_loses_the_damaged_entries
+    processes, _, _, _, _ = self.sample(rows, {'at': at, 'procs': {'30': [100, 100]}}, 1010.0)
+                            ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 531, in sample
+    return probe.process_sample({'Titles': self.TITLES, 'Processes': rows}, previous)
+           ~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py", line 213, in process_sample
+    if fallback is None and (not isinstance(previous_at, (int, float)) or not math.isfinite(previous_at)
+                                                                              ~~~~~~~~~~~~~^^^^^^^^^^^^^
+OverflowError: int too large to convert to float
+
+======================================================================
+FAIL: test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='睡眠工作')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 646, in test_names_ps_rewrites_are_not_compared
+    self.assertNotIn('cpu_fallback', processes[0])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'cpu_fallback' unexpectedly found in {'pid': '10', 'state': 'S', 'cpu': 1.0, 'memory': 1.0, 'name': '????????????', 'cpu_interval': None, 'cpu_fallback': 'proc_unreadable'}
+
+======================================================================
+FAIL: test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='café')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 646, in test_names_ps_rewrites_are_not_compared
+    self.assertNotIn('cpu_fallback', processes[0])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'cpu_fallback' unexpectedly found in {'pid': '11', 'state': 'S', 'cpu': 1.0, 'memory': 1.0, 'name': 'caf??', 'cpu_interval': None, 'cpu_fallback': 'proc_unreadable'}
+
+======================================================================
+FAIL: test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='a  b')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 646, in test_names_ps_rewrites_are_not_compared
+    self.assertNotIn('cpu_fallback', processes[0])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'cpu_fallback' unexpectedly found in {'pid': '12', 'state': 'S', 'cpu': 1.0, 'memory': 1.0, 'name': 'a b', 'cpu_interval': None, 'cpu_fallback': 'proc_unreadable'}
+
+======================================================================
+FAIL: test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm=' lead')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 646, in test_names_ps_rewrites_are_not_compared
+    self.assertNotIn('cpu_fallback', processes[0])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'cpu_fallback' unexpectedly found in {'pid': '13', 'state': 'S', 'cpu': 1.0, 'memory': 1.0, 'name': 'lead', 'cpu_interval': None, 'cpu_fallback': 'proc_unreadable'}
+
+======================================================================
+FAIL: test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='abcdefghijklmn ')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 646, in test_names_ps_rewrites_are_not_compared
+    self.assertNotIn('cpu_fallback', processes[0])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'cpu_fallback' unexpectedly found in {'pid': '14', 'state': 'S', 'cpu': 1.0, 'memory': 1.0, 'name': 'abcdefghijklmn', 'cpu_interval': None, 'cpu_fallback': 'proc_unreadable'}
+
+======================================================================
+FAIL: test_names_ps_rewrites_are_not_compared (test_container_probe.ProcessCpuIntervalTests.test_names_ps_rewrites_are_not_compared) (comm='x\tz')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 646, in test_names_ps_rewrites_are_not_compared
+    self.assertNotIn('cpu_fallback', processes[0])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'cpu_fallback' unexpectedly found in {'pid': '15', 'state': 'S', 'cpu': 1.0, 'memory': 1.0, 'name': 'x?z', 'cpu_interval': None, 'cpu_fallback': 'proc_unreadable'}
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.026s
+
+FAILED (failures=6, errors=1)

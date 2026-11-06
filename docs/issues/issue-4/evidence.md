@@ -24,7 +24,8 @@
 ## 綠燈與完整檢查
 
 - 首次交付（02eda4b）：`env -u DISPLAY -u WAYLAND_DISPLAY bash scripts/check.sh`，exit 0，Ran 139 tests，OK，沒有跳過。139 = 129 + 10 個新測試（helper 7 個、儀表板 3 個）。
-- 審查修正後：同一命令 exit 0，Ran 147 tests，OK，沒有跳過，All checks passed（[artifacts/check.log](artifacts/check.log)）。147 = 139 + 8 個新測試（helper 7 個、儀表板 1 個），見下方「審查修正」。
+- 第一輪審查修正後（ef3c759）：同一命令 exit 0，Ran 147 tests，OK，沒有跳過。147 = 139 + 8 個新測試（helper 7 個、儀表板 1 個），見下方「審查修正」。
+- 第二輪審查修正後：同一命令 exit 0，Ran 149 tests，OK，沒有跳過，All checks passed（[artifacts/check.log](artifacts/check.log)）。149 = 147 + 2 個新測試，見下方「第二輪審查修正」。
 
 ## 突變驗證
 
@@ -76,6 +77,30 @@
 
 首次交付時的 `rankfallback`（退回時仍用區間值排序）在加上第二排序鍵後與正確程式等價，不再是突變；它保護的行為改由 `lifetimekey` 驗證。
 
+## 第二輪審查修正（review-ef3c759）
+
+[review-ef3c759.md](review-ef3c759.md) 判定 PASS，S1 需決策。2026-11-06 使用者選「只比對單純 ASCII 名稱」（TBD-4，SCN-004 第二次修訂）。
+
+| 發現 | 修正 | 紅燈（[artifacts/red-review2-fix.log](artifacts/red-review2-fix.log)） |
+|---|---|---|
+| S1 ps 改寫顯示名稱造成固定誤判 | 核心 comm 是可列印 ASCII、沒有開頭、結尾或連續空白時才比對 | `test_names_ps_rewrites_are_not_compared`：6 個 subTest 都因為出現 `cpu_fallback` 失敗。輸入取自 reviewer 以 procps-ng 4.0.4 實測的 ps 輸出 |
+| N1 名稱測試只分得出首字元 | 補首字元相同的不一致（top `node`、核心 `nginx`） | 刻畫測試，原本就綠；以 `firstchar` 突變驗證 |
+| N2 cache 的 `at` 是極大整數時 helper 失敗 | `at` 必須是 float（JSON 讀回的時間一律是 float） | `test_damaged_cache_only_loses_the_damaged_entries` 的 `10**400` subTest：`OverflowError` |
+| N3 文件沒寫未知值的位置 | architecture.md 補上「未知排在所有已知值之後」 | 文件 |
+| N4 VM 情境下 PID 全都不存在 | 不修；數字不會錯，只是每個程序都是未知，reviewer 列為參考 | — |
+
+architecture.md 也改寫名稱不一致的解讀：「可能是另一個 PID namespace」，並說明哪些名稱不比對。README 雙語版本改成「單純 ASCII 程序名稱不一致」。
+
+重跑全部 16 個突變（[artifacts/mutations-review2-fix.txt](artifacts/mutations-review2-fix.txt)）：未修改的版本全過，每個突變都有測試失敗。新增的 3 個：
+
+| 突變 | 失敗的測試 |
+|---|---|
+| `plainskip` 拿掉「只比對單純名稱」 | ps 改寫的 6 個 subTest |
+| `firstchar` 名稱只比首字元 | 首字元相同的不一致 |
+| `floatonly` `at` 也接受整數 | cache 損壞（`10**400`） |
+
+修正後再對真實 Docker 唯讀跑兩輪：第一輪 15 個程序都是 `no_previous`，第二輪 15 個都有區間值。
+
 ## 真實對照組（主機，TBD-2）
 
 - 腳本：[artifacts/host_control.py](artifacts/host_control.py)。在主機上啟動自己的程序，先閒置 10 秒，再忙迴圈 15 秒。用 `ps -o pid,stat,pcpu,pmem,comm` 的輸出當作 Docker top 的資料，走完整的 `process_sample`，讀真實的 `/proc`。
@@ -102,7 +127,7 @@
 | SCN-001 | `test_scn001_spiking_long_lived_process_ranks_first_by_interval`、`test_scn001_interval_and_lifetime_are_both_shown`、突變（排序、分母）、主機對照組 | 通過 |
 | SCN-002 | `test_scn002_without_previous_ranks_by_lifetime_and_says_why`（輸入順序已改，`lifetimekey` 突變）、時鐘沒前進的測試、儀表板退回標示、真實採樣第一輪 | 通過 |
 | SCN-003（修訂） | `test_scn003_pid_reuse_new_and_exited_processes`、`test_scn003_new_process_needs_one_second_of_life`、程序在讀取前結束的測試、`nostart`／`onesecond`／`borneq` 突變 | 通過 |
-| SCN-004（修訂） | `test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container`、`test_scn004_name_mismatch_means_another_pid_namespace`、儀表板退回標示、`namecheck`／`lifetimekey` 突變；helper 既有的預算與硬上限測試仍通過 | 通過 |
+| SCN-004（第二次修訂） | `test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container`、`test_scn004_name_mismatch_means_another_pid_namespace`、`test_mismatch_sharing_the_first_letter_still_falls_back`、`test_names_ps_rewrites_are_not_compared`、儀表板退回標示、`namecheck`／`plainskip`／`firstchar`／`lifetimekey` 突變；helper 既有的預算與硬上限測試仍通過 | 通過 |
 | SCN-005 | `test_scn005_collect_keeps_readings_of_live_deep_processes_only`、`test_scn005_old_rows_keep_the_old_wording`；既有的 TSV 欄位測試仍通過 | 通過 |
 
 ## 其他
