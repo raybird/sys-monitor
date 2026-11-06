@@ -1,0 +1,326 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+test_scn006_file_matches_preview_and_is_private (test_diagnostic_report.DiagnosticReportTests.test_scn006_file_matches_preview_and_is_private) ... ERROR
+test_scn006_previous_boot_kernel_evidence_and_missing_after_data (test_diagnostic_report.DiagnosticReportTests.test_scn006_previous_boot_kernel_evidence_and_missing_after_data) ... ERROR
+test_scn006_sensitive_data_removed_but_diagnostic_values_kept (test_diagnostic_report.DiagnosticReportTests.test_scn006_sensitive_data_removed_but_diagnostic_values_kept) ... ERROR
+test_scn006_window_includes_after_rotation_excludes_outside_and_other_session (test_diagnostic_report.DiagnosticReportTests.test_scn006_window_includes_after_rotation_excludes_outside_and_other_session) ... ERROR
+test_formats_missing_values (test_freeze_watch.FreezeWatchDataTests.test_formats_missing_values) ... ok
+test_reads_a_file_written_before_the_newest_columns (test_freeze_watch.FreezeWatchDataTests.test_reads_a_file_written_before_the_newest_columns)
+Columns are appended, so an older file just stops short of them. ... ok
+test_reads_latest_metrics_row (test_freeze_watch.FreezeWatchDataTests.test_reads_latest_metrics_row) ... ok
+test_temperature_levels (test_freeze_watch.FreezeWatchDataTests.test_temperature_levels) ... ok
+test_ignores_unrecognised_devices (test_freeze_watch.HwmonTests.test_ignores_unrecognised_devices) ... ok
+test_prefers_earlier_candidate_over_lower_device_number (test_freeze_watch.HwmonTests.test_prefers_earlier_candidate_over_lower_device_number) ... ok
+test_reads_intel_package_sensor (test_freeze_watch.HwmonTests.test_reads_intel_package_sensor) ... ok
+test_sensor_lists_match_the_collector (test_freeze_watch.HwmonTests.test_sensor_lists_match_the_collector) ... ok
+test_derives_the_docker_path_from_the_metrics_path (test_freeze_watch.IncidentTests.test_derives_the_docker_path_from_the_metrics_path) ... ok
+test_finds_the_file_covering_a_stall (test_freeze_watch.IncidentTests.test_finds_the_file_covering_a_stall) ... ok
+test_ignores_routine_entries (test_freeze_watch.IncidentTests.test_ignores_routine_entries) ... ok
+test_newest_incident_comes_first (test_freeze_watch.IncidentTests.test_newest_incident_comes_first) ... ok
+test_reads_a_freeze_and_the_file_it_names (test_freeze_watch.IncidentTests.test_reads_a_freeze_and_the_file_it_names) ... ok
+test_returns_only_the_window_before_the_incident (test_freeze_watch.IncidentTests.test_returns_only_the_window_before_the_incident) ... ok
+test_scn002_review_anchors_on_last_sample_and_crosses_rotation (test_freeze_watch.IncidentTests.test_scn002_review_anchors_on_last_sample_and_crosses_rotation) ... FAIL
+test_scn004_old_and_new_unclean_events_use_uncertain_labels (test_freeze_watch.IncidentTests.test_scn004_old_and_new_unclean_events_use_uncertain_labels) ... FAIL
+test_scn006_old_stall_still_has_data_after_the_file_grows (test_freeze_watch.IncidentTests.test_scn006_old_stall_still_has_data_after_the_file_grows) ... FAIL
+test_handles_too_few_samples (test_freeze_watch.StallPositionTests.test_handles_too_few_samples) ... ok
+test_leaves_regular_sampling_unmarked (test_freeze_watch.StallPositionTests.test_leaves_regular_sampling_unmarked) ... ok
+test_marks_a_late_sample (test_freeze_watch.StallPositionTests.test_marks_a_late_sample) ... ok
+test_scn005_holder_baseline_then_active_delta_and_idle (test_gpu_sample.GpuSampleTests.test_scn005_holder_baseline_then_active_delta_and_idle) ... ERROR
+test_scn005_missing_counters_exited_fd_and_capacity (test_gpu_sample.GpuSampleTests.test_scn005_missing_counters_exited_fd_and_capacity) ... ERROR
+test_scn005_permission_denied_is_partial_and_does_not_raise (test_gpu_sample.GpuSampleTests.test_scn005_permission_denied_is_partial_and_does_not_raise) ... ERROR
+test_scn005_regressed_counter_holds_baseline_until_catch_up (test_gpu_sample.GpuSampleTests.test_scn005_regressed_counter_holds_baseline_until_catch_up) ... ERROR
+test_scn005_reused_pid_is_a_new_baseline (test_gpu_sample.GpuSampleTests.test_scn005_reused_pid_is_a_new_baseline) ... ERROR
+test_scn005_scan_budget_is_visible (test_gpu_sample.GpuSampleTests.test_scn005_scan_budget_is_visible) ... ERROR
+test_scn005_shared_and_duplicate_descriptors_are_not_double_counted (test_gpu_sample.GpuSampleTests.test_scn005_shared_and_duplicate_descriptors_are_not_double_counted) ... ERROR
+test_scn002_multiple_rotations_use_latest_sample (test_previous_session.PreviousSessionTests.test_scn002_multiple_rotations_use_latest_sample) ... FAIL
+test_scn003_does_not_borrow_a_previous_session_rotation (test_previous_session.PreviousSessionTests.test_scn003_does_not_borrow_a_previous_session_rotation) ... ok
+test_scn003_empty_missing_and_invalid_rotations_fall_back (test_previous_session.PreviousSessionTests.test_scn003_empty_missing_and_invalid_rotations_fall_back) ... FAIL
+test_scn003_no_samples_are_unknown (test_previous_session.PreviousSessionTests.test_scn003_no_samples_are_unknown) ... ok
+test_scn003_stop_does_not_report_an_incident (test_previous_session.PreviousSessionTests.test_scn003_stop_does_not_report_an_incident) ... ok
+test_scn004_different_boot_reports_uncertainty (test_previous_session.PreviousSessionTests.test_scn004_different_boot_reports_uncertainty) ... FAIL
+test_scn004_same_boot_is_collector_interruption (test_previous_session.PreviousSessionTests.test_scn004_same_boot_is_collector_interruption) ... ok
+test_scn005_disabled_has_no_scan_state (test_previous_session.PreviousSessionTests.test_scn005_disabled_has_no_scan_state) ... ERROR
+test_scn005_opt_in_is_recorded_and_counter_state_is_private (test_previous_session.PreviousSessionTests.test_scn005_opt_in_is_recorded_and_counter_state_is_private) ... ERROR
+test_keeps_the_preferred_size_on_a_large_screen (test_window_layout.ClampTests.test_keeps_the_preferred_size_on_a_large_screen) ... ok
+test_never_goes_below_the_minimum (test_window_layout.ClampTests.test_never_goes_below_the_minimum) ... ok
+test_shrinks_to_fit_a_small_screen (test_window_layout.ClampTests.test_shrinks_to_fit_a_small_screen) ... ok
+test_a_changed_reading_differs (test_window_layout.ContainerSignatureTests.test_a_changed_reading_differs) ... ok
+test_a_field_that_is_not_rendered_is_ignored (test_window_layout.ContainerSignatureTests.test_a_field_that_is_not_rendered_is_ignored) ... ok
+test_identical_rows_compare_equal (test_window_layout.ContainerSignatureTests.test_identical_rows_compare_equal) ... ok
+test_order_matters (test_window_layout.ContainerSignatureTests.test_order_matters) ... ok
+test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.DropdownContrastTests.test_scn001_light_dark_normal_hover_selected_contrast) ... /usr/lib/python3/dist-packages/gi/overrides/Gtk.py:1801: DeprecationWarning: Gtk.CssProvider.load_from_data is deprecated
+  super().load_from_data(text, length)
+MESA: info: vulkan: No DRI3 support detected - required for presentation
+Note: you can probably enable DRI3 in your Xorg config
+/usr/lib/python3/dist-packages/gi/events.py:803: DeprecationWarning: 'asyncio.AbstractEventLoopPolicy' is deprecated and slated for removal in Python 3.16
+  AbstractEventLoopPolicy = getattr(asyncio, "AbstractEventLoopPolicy", object)
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/tmp/issue1-red-base/tests/test_window_layout.py:236: DeprecationWarning: Gtk.Widget.get_style_context is deprecated
+  Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+/tmp/issue1-red-base/tests/test_window_layout.py:236: DeprecationWarning: Gtk.render_background is deprecated
+  Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+/tmp/issue1-red-base/tests/test_window_layout.py:239: DeprecationWarning: Gtk.StyleContext.get_color is deprecated
+  foreground = next(widget for widget in descendants(row) if widget.get_css_name() == "label").get_style_context().get_color()
+
+  test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.DropdownContrastTests.test_scn001_light_dark_normal_hover_selected_contrast) (dark=False, state=<StateFlags.NORMAL: 0>) ... FAIL
+  test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.DropdownContrastTests.test_scn001_light_dark_normal_hover_selected_contrast) (dark=False, state=<StateFlags.PRELIGHT: 2>) ... FAIL
+  test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.DropdownContrastTests.test_scn001_light_dark_normal_hover_selected_contrast) (dark=False, state=<StateFlags.SELECTED: 4>) ... FAIL
+MESA: info: vulkan: No DRI3 support detected - required for presentation
+Note: you can probably enable DRI3 in your Xorg config
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+test_a_plain_label_demands_its_whole_text (test_window_layout.LabelWidthTests.test_a_plain_label_demands_its_whole_text) ... ok
+test_an_ellipsized_label_can_shrink (test_window_layout.LabelWidthTests.test_an_ellipsized_label_can_shrink) ... ok
+test_scn006_preview_does_not_write_and_cancel_keeps_it_readonly (test_window_layout.ReportPreviewTests.test_scn006_preview_does_not_write_and_cancel_keeps_it_readonly) ... ERROR
+test_container_rows_stay_shrinkable (test_window_layout.RowWidthTests.test_container_rows_stay_shrinkable) ... ok
+test_event_rows_stay_shrinkable (test_window_layout.RowWidthTests.test_event_rows_stay_shrinkable) ... ok
+test_puts_the_position_back (test_window_layout.ScrollRestoreTests.test_puts_the_position_back) ... ok
+test_stops_running_after_one_pass (test_window_layout.ScrollRestoreTests.test_stops_running_after_one_pass) ... ok
+
+======================================================================
+ERROR: test_scn006_file_matches_preview_and_is_private (test_diagnostic_report.DiagnosticReportTests.test_scn006_file_matches_preview_and_is_private)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_diagnostic_report.py", line 45, in test_scn006_file_matches_preview_and_is_private
+    watch.write_diagnostic_report(path, text)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'report_watch' has no attribute 'write_diagnostic_report'
+
+======================================================================
+ERROR: test_scn006_previous_boot_kernel_evidence_and_missing_after_data (test_diagnostic_report.DiagnosticReportTests.test_scn006_previous_boot_kernel_evidence_and_missing_after_data)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_diagnostic_report.py", line 81, in test_scn006_previous_boot_kernel_evidence_and_missing_after_data
+    text = watch.diagnostic_report(incident)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'report_watch' has no attribute 'diagnostic_report'
+
+======================================================================
+ERROR: test_scn006_sensitive_data_removed_but_diagnostic_values_kept (test_diagnostic_report.DiagnosticReportTests.test_scn006_sensitive_data_removed_but_diagnostic_values_kept)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_diagnostic_report.py", line 36, in test_scn006_sensitive_data_removed_but_diagnostic_values_kept
+    report = watch.diagnostic_report(incident)
+             ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'report_watch' has no attribute 'diagnostic_report'
+
+======================================================================
+ERROR: test_scn006_window_includes_after_rotation_excludes_outside_and_other_session (test_diagnostic_report.DiagnosticReportTests.test_scn006_window_includes_after_rotation_excludes_outside_and_other_session)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_diagnostic_report.py", line 70, in test_scn006_window_includes_after_rotation_excludes_outside_and_other_session
+    text = watch.diagnostic_report(incident)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'report_watch' has no attribute 'diagnostic_report'
+
+======================================================================
+ERROR: test_scn005_holder_baseline_then_active_delta_and_idle (test_gpu_sample.GpuSampleTests.test_scn005_holder_baseline_then_active_delta_and_idle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_gpu_sample.py", line 38, in test_scn005_holder_baseline_then_active_delta_and_idle
+    report, previous = gpu.sample_gpu(self.proc, {}, 1000)
+                       ^^^^^^^^^^^^^^
+AttributeError: module 'gpu_sample' has no attribute 'sample_gpu'
+
+======================================================================
+ERROR: test_scn005_missing_counters_exited_fd_and_capacity (test_gpu_sample.GpuSampleTests.test_scn005_missing_counters_exited_fd_and_capacity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_gpu_sample.py", line 74, in test_scn005_missing_counters_exited_fd_and_capacity
+    _, previous = gpu.sample_gpu(self.proc, {}, 1000)
+                  ^^^^^^^^^^^^^^
+AttributeError: module 'gpu_sample' has no attribute 'sample_gpu'
+
+======================================================================
+ERROR: test_scn005_permission_denied_is_partial_and_does_not_raise (test_gpu_sample.GpuSampleTests.test_scn005_permission_denied_is_partial_and_does_not_raise)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_gpu_sample.py", line 96, in test_scn005_permission_denied_is_partial_and_does_not_raise
+    report, _ = gpu.sample_gpu(self.proc, {}, 1000)
+                ^^^^^^^^^^^^^^
+AttributeError: module 'gpu_sample' has no attribute 'sample_gpu'
+
+======================================================================
+ERROR: test_scn005_regressed_counter_holds_baseline_until_catch_up (test_gpu_sample.GpuSampleTests.test_scn005_regressed_counter_holds_baseline_until_catch_up)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_gpu_sample.py", line 57, in test_scn005_regressed_counter_holds_baseline_until_catch_up
+    _, previous = gpu.sample_gpu(self.proc, {}, 1000)
+                  ^^^^^^^^^^^^^^
+AttributeError: module 'gpu_sample' has no attribute 'sample_gpu'
+
+======================================================================
+ERROR: test_scn005_reused_pid_is_a_new_baseline (test_gpu_sample.GpuSampleTests.test_scn005_reused_pid_is_a_new_baseline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_gpu_sample.py", line 67, in test_scn005_reused_pid_is_a_new_baseline
+    _, previous = gpu.sample_gpu(self.proc, {}, 1000)
+                  ^^^^^^^^^^^^^^
+AttributeError: module 'gpu_sample' has no attribute 'sample_gpu'
+
+======================================================================
+ERROR: test_scn005_scan_budget_is_visible (test_gpu_sample.GpuSampleTests.test_scn005_scan_budget_is_visible)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_gpu_sample.py", line 88, in test_scn005_scan_budget_is_visible
+    report, _ = gpu.sample_gpu(self.proc, {}, 1000, budget_ns=0)
+                ^^^^^^^^^^^^^^
+AttributeError: module 'gpu_sample' has no attribute 'sample_gpu'
+
+======================================================================
+ERROR: test_scn005_shared_and_duplicate_descriptors_are_not_double_counted (test_gpu_sample.GpuSampleTests.test_scn005_shared_and_duplicate_descriptors_are_not_double_counted)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_gpu_sample.py", line 51, in test_scn005_shared_and_duplicate_descriptors_are_not_double_counted
+    report, _ = gpu.sample_gpu(self.proc, {}, 1000)
+                ^^^^^^^^^^^^^^
+AttributeError: module 'gpu_sample' has no attribute 'sample_gpu'
+
+======================================================================
+ERROR: test_scn005_disabled_has_no_scan_state (test_previous_session.PreviousSessionTests.test_scn005_disabled_has_no_scan_state)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_previous_session.py", line 129, in test_scn005_disabled_has_no_scan_state
+    self.assertEqual(row["gpu_processes"], "disabled")
+                     ~~~^^^^^^^^^^^^^^^^^
+KeyError: 'gpu_processes'
+
+======================================================================
+ERROR: test_scn005_opt_in_is_recorded_and_counter_state_is_private (test_previous_session.PreviousSessionTests.test_scn005_opt_in_is_recorded_and_counter_state_is_private)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_previous_session.py", line 120, in test_scn005_opt_in_is_recorded_and_counter_state_is_private
+    data = json.loads(rows[-1]["gpu_processes"])
+                      ~~~~~~~~^^^^^^^^^^^^^^^^^
+KeyError: 'gpu_processes'
+
+======================================================================
+ERROR: test_scn006_preview_does_not_write_and_cancel_keeps_it_readonly (test_window_layout.ReportPreviewTests.test_scn006_preview_does_not_write_and_cancel_keeps_it_readonly)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_window_layout.py", line 262, in test_scn006_preview_does_not_write_and_cancel_keeps_it_readonly
+    preview = app._preview_report(None)
+              ^^^^^^^^^^^^^^^^^^^
+AttributeError: 'FreezeWatch' object has no attribute '_preview_report'
+
+======================================================================
+FAIL: test_scn002_review_anchors_on_last_sample_and_crosses_rotation (test_freeze_watch.IncidentTests.test_scn002_review_anchors_on_last_sample_and_crosses_rotation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_freeze_watch.py", line 194, in test_scn002_review_anchors_on_last_sample_and_crosses_rotation
+    self.assertEqual(len(incidents), 1)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 1
+
+======================================================================
+FAIL: test_scn004_old_and_new_unclean_events_use_uncertain_labels (test_freeze_watch.IncidentTests.test_scn004_old_and_new_unclean_events_use_uncertain_labels)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_freeze_watch.py", line 181, in test_scn004_old_and_new_unclean_events_use_uncertain_labels
+    self.assertIn("疑似當機", incident.label)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '疑似當機' not found in '2026-10-05 00:00 · 凍結'
+
+======================================================================
+FAIL: test_scn006_old_stall_still_has_data_after_the_file_grows (test_freeze_watch.IncidentTests.test_scn006_old_stall_still_has_data_after_the_file_grows)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_freeze_watch.py", line 204, in test_scn006_old_stall_still_has_data_after_the_file_grows
+    self.assertEqual(incident.metrics_path, metrics)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != PosixPath('/tmp/tmpxrfsmmry/metrics-grown.tsv')
+
+======================================================================
+FAIL: test_scn002_multiple_rotations_use_latest_sample (test_previous_session.PreviousSessionTests.test_scn002_multiple_rotations_use_latest_sample)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_previous_session.py", line 61, in test_scn002_multiple_rotations_use_latest_sample
+    self.assertIn(f"metrics={latest}", message)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'metrics=/tmp/tmpkweqh74_/freeze-monitor/metrics-latest.tsv' not found in 'previous session ended without shutting down; last_sample=2023-11-15T06:13:20+08:00 silent_for=91340344s metrics=/tmp/tmpkweqh74_/freeze-monitor/metrics-first.tsv'
+
+======================================================================
+FAIL: test_scn003_empty_missing_and_invalid_rotations_fall_back (test_previous_session.PreviousSessionTests.test_scn003_empty_missing_and_invalid_rotations_fall_back)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_previous_session.py", line 74, in test_scn003_empty_missing_and_invalid_rotations_fall_back
+    self.assertIn(f"metrics={valid}", message)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'metrics=/tmp/tmpoz5lknvo/freeze-monitor/metrics-valid.tsv' not found in 'previous session ended without shutting down; last_sample=2023-11-15T06:13:20+08:00 silent_for=91340348s metrics=/tmp/tmpoz5lknvo/freeze-monitor/metrics-first.tsv'
+
+======================================================================
+FAIL: test_scn004_different_boot_reports_uncertainty (test_previous_session.PreviousSessionTests.test_scn004_different_boot_reports_uncertainty)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_previous_session.py", line 99, in test_scn004_different_boot_reports_uncertainty
+    self.assertEqual(record[1], "UNCLEAN")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'FREEZE' != 'UNCLEAN'
+- FREEZE
++ UNCLEAN
+
+
+======================================================================
+FAIL: test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.DropdownContrastTests.test_scn001_light_dark_normal_hover_selected_contrast) (dark=False, state=<StateFlags.NORMAL: 0>)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_window_layout.py", line 244, in test_scn001_light_dark_normal_hover_selected_contrast
+    self.assertGreaterEqual(ratio, 4.5)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: 1.242373797476798 not greater than or equal to 4.5
+
+======================================================================
+FAIL: test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.DropdownContrastTests.test_scn001_light_dark_normal_hover_selected_contrast) (dark=False, state=<StateFlags.PRELIGHT: 2>)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_window_layout.py", line 244, in test_scn001_light_dark_normal_hover_selected_contrast
+    self.assertGreaterEqual(ratio, 4.5)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: 1.139550980355595 not greater than or equal to 4.5
+
+======================================================================
+FAIL: test_scn001_light_dark_normal_hover_selected_contrast (test_window_layout.DropdownContrastTests.test_scn001_light_dark_normal_hover_selected_contrast) (dark=False, state=<StateFlags.SELECTED: 4>)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/issue1-red-base/tests/test_window_layout.py", line 244, in test_scn001_light_dark_normal_hover_selected_contrast
+    self.assertGreaterEqual(ratio, 4.5)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: 1.242373797476798 not greater than or equal to 4.5
+
+----------------------------------------------------------------------
+Ran 55 tests in 19.868s
+
+FAILED (failures=9, errors=14)

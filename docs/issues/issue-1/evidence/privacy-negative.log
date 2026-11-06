@@ -1,0 +1,16 @@
+test_scn006_sensitive_data_removed_but_diagnostic_values_kept (negative_report.DiagnosticReportTests.test_scn006_sensitive_data_removed_but_diagnostic_values_kept) ... FAIL
+
+======================================================================
+FAIL: test_scn006_sensitive_data_removed_but_diagnostic_values_kept (negative_report.DiagnosticReportTests.test_scn006_sensitive_data_removed_but_diagnostic_values_kept)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_diagnostic_report.py", line 38, in test_scn006_sensitive_data_removed_but_diagnostic_values_kept
+    self.assertNotIn(secret, report)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: '/home/private' unexpectedly found in 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\tcpu_psi_full_avg10\tmemory_psi_full_avg10\tio_psi_full_avg10\tdstate_count\tcpu_throttle_count\tswapin_pages\tswapout_pages\tmajfault_count\tdisk_in_flight\tdisk_busy_ms\ttop_memory_processes\tgpu_processes\n2026-10-05T00:00:00+00:00\t1791158400\tNA\tNA\tNA\tNA\tNA\tNA\tNA\t52000\tNA\tNA\tNA\t1.5\tNA\t3.5\tNA\tNA\tNA\tNA\tNA\tNA\tNA\t/home/private/job --password=secret\tNA\t2.5\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\n2026-10-05T00:00:01+00:00\tKERNEL\tGPU HANG in /home/private/job --password=secret\n'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (failures=1)
+已知洩漏的對照組被測試拒絕；隱私判準有效。

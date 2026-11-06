@@ -5,7 +5,9 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 import os
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -32,12 +34,14 @@ STATE_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state"))
 HWMON_ROOT = Path(os.environ.get("FREEZE_WATCH_HWMON_ROOT", "/sys/class/hwmon"))
 # FREEZE and GAP are the reason the collector exists, so they outrank the
 # routine housekeeping entries when the dashboard picks what to show.
-NOTEWORTHY_EVENTS = ("FREEZE", "KERNEL", "INTERRUPTED", "GAP", "WARN", "ROTATE")
+NOTEWORTHY_EVENTS = ("UNCLEAN", "FREEZE", "KERNEL", "INTERRUPTED", "GAP", "WARN", "ROTATE")
 
 # Events worth going back to look at, as opposed to merely worth reading.
-INCIDENT_KINDS = ("FREEZE", "GAP")
+INCIDENT_KINDS = ("UNCLEAN", "FREEZE", "GAP")
 INCIDENT_LIMIT = 8
 INCIDENT_WINDOW_SECONDS = 30 * 60
+# The ribbon shows the last half hour of 10 s samples.
+HISTORY_ROWS = 180
 EVENT_HISTORY_LIMIT = 12
 # Matches the collector's default. Only used to turn busy milliseconds into a
 # share of the interval, so a mismatch misreads that one figure and nothing else.
@@ -67,7 +71,7 @@ METRICS_FIELDS = [
     # written before this release simply stops short of them.
     "cpu_psi_full_avg10", "memory_psi_full_avg10", "io_psi_full_avg10",
     "dstate_count", "cpu_throttle_count", "swapin_pages", "swapout_pages",
-    "majfault_count", "disk_in_flight", "disk_busy_ms", "top_memory_processes",
+    "majfault_count", "disk_in_flight", "disk_busy_ms", "top_memory_processes", "gpu_processes",
 ]
 DOCKER_FIELDS = [
     "timestamp", "epoch", "container", "is_tracked_project", "cpu_pct",
@@ -84,8 +88,14 @@ def tail_text(path: Path, byte_limit: int = 160_000) -> str:
         with path.open("rb") as handle:
             handle.seek(0, os.SEEK_END)
             size = handle.tell()
-            handle.seek(max(0, size - byte_limit))
+            start = max(0, size - byte_limit)
+            # Start one byte early so a cut that lands on a line boundary keeps
+            # that line, then drop the partial line in front of it.
+            handle.seek(max(0, start - 1))
             data = handle.read()
+            if start > 0:
+                newline = data.find(b"\n")
+                data = data[newline + 1:] if newline >= 0 else b""
         return data.decode("utf-8", errors="replace")
     except OSError:
         return ""
@@ -98,24 +108,32 @@ def newest_file(pattern: str) -> Path | None:
     return max(files, key=lambda item: item.stat().st_mtime)
 
 
-def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_000) -> list[dict[str, str]]:
+def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_000,
+                  min_rows: int = 0) -> list[dict[str, str]]:
     if path is None:
         return []
 
-    lines = tail_text(path, byte_limit).splitlines()
-    if not lines:
-        return []
-
-    # restval keeps a row written before a column existed reading as missing
-    # data rather than as None, which every caller here would render literally.
-    rows = list(
-        csv.DictReader(lines, fieldnames=fields, delimiter="\t", restval="NA")
-    )
-    return [row for row in rows if row.get("timestamp") and row["timestamp"] != "timestamp"]
+    while True:
+        lines = tail_text(path, byte_limit).splitlines()
+        # restval keeps a row written before a column existed reading as missing
+        # data rather than as None, which every caller here would render literally.
+        rows = [
+            row for row in csv.DictReader(lines, fieldnames=fields, delimiter="\t", restval="NA")
+            if row.get("timestamp") and row["timestamp"] != "timestamp"
+        ]
+        # Row width varies (GPU JSON), so a fixed byte window can hold far
+        # fewer rows than the view needs; widen until it does or the file ends.
+        try:
+            whole_file = path.stat().st_size <= byte_limit
+        except OSError:
+            whole_file = True
+        if len(rows) >= min_rows or whole_file:
+            return rows
+        byte_limit *= 4
 
 
 def read_tsv_tail(pattern: str, fields: list[str]) -> list[dict[str, str]]:
-    return read_tsv_path(newest_file(pattern), fields)
+    return read_tsv_path(newest_file(pattern), fields, min_rows=HISTORY_ROWS)
 
 
 class Incident(NamedTuple):
@@ -129,7 +147,8 @@ class Incident(NamedTuple):
     @property
     def label(self) -> str:
         moment = self.timestamp.replace("T", " ")[:16]
-        return f"{moment} · {'凍結' if self.kind == 'FREEZE' else '停擺'}"
+        kind = "非正常關機／疑似當機" if self.kind in ("FREEZE", "UNCLEAN") else "取樣停擺"
+        return f"{moment} · {kind}"
 
 
 def parse_event_line(line: str) -> tuple[str, str, str] | None:
@@ -173,8 +192,14 @@ def metrics_file_covering(timestamp: str) -> Path | None:
         rows = read_tsv_path(path, METRICS_FIELDS)
         if not rows:
             continue
-        first = as_int(rows[0].get("epoch"))
-        last = as_int(rows[-1].get("epoch"))
+        try:
+            with path.open(errors="replace") as handle:
+                first_row = next(csv.DictReader(handle, delimiter="\t"), {})
+        except OSError:
+            continue
+        first = as_int(first_row.get("epoch"))
+        last = next((epoch for row in reversed(rows)
+                     if (epoch := as_int(row.get("epoch"))) is not None), None)
         if first is not None and last is not None and first <= target <= last:
             return path
     return None
@@ -193,25 +218,172 @@ def epoch_of(timestamp: str) -> int | None:
         return None
 
 
+def incident_end(incident: Incident) -> int | None:
+    for part in incident.message.split():
+        if part.startswith("last_sample="):
+            stamp = part.split("=", 1)[1]
+            if stamp != "unknown":
+                return epoch_of(stamp)
+    return epoch_of(incident.timestamp)
+
+
+def incident_paths(incident: Incident, include_after: bool = False) -> list[Path]:
+    paths: list[Path] = []
+    found = False
+    for line in tail_text(STATE_DIR / "events.log", 2_000_000).splitlines():
+        parsed = parse_event_line(line)
+        if parsed is None:
+            continue
+        timestamp, kind, message = parsed
+        if kind in ("START", "STOP"):
+            if found:
+                break
+            paths = []
+        if kind in ("START", "ROTATE") and "metrics=" in message:
+            paths.append(Path(message.split("metrics=", 1)[1].split(" ", 1)[0]))
+        if timestamp == incident.timestamp and kind == incident.kind and message == incident.message:
+            found = True
+            if not include_after:
+                break
+    if incident.metrics_path in paths:
+        return paths if include_after else paths[:paths.index(incident.metrics_path) + 1]
+    return [incident.metrics_path] if incident.metrics_path is not None else []
+
+
+def metric_window(path: Path, start: int, finish: int) -> list[dict[str, str]]:
+    rows = []
+    try:
+        with path.open(errors="replace") as handle:
+            for row in csv.DictReader(handle, delimiter="\t"):
+                epoch = as_int(row.get("epoch"))
+                if epoch is not None and start <= epoch <= finish:
+                    rows.append(row)
+    except OSError:
+        pass
+    return rows
+
+
 def incident_rows(incident: Incident) -> list[dict[str, str]]:
-    """The samples leading up to an incident."""
-    rows = read_tsv_path(incident.metrics_path, METRICS_FIELDS)
-    if not rows:
-        return []
-
-    end = epoch_of(incident.timestamp)
+    end = incident_end(incident)
+    rows: list[dict[str, str]] = []
+    for path in reversed(incident_paths(incident)):
+        samples = read_tsv_path(path, METRICS_FIELDS, 4_000_000)
+        if end is not None and samples and (as_int(samples[0].get("epoch")) or 0) > end - INCIDENT_WINDOW_SECONDS:
+            samples = metric_window(path, end - INCIDENT_WINDOW_SECONDS, end)
+        rows = samples + rows
+        if samples and end is not None and (as_int(samples[0].get("epoch")) or 0) < end - INCIDENT_WINDOW_SECONDS:
+            break
     if end is None:
-        end = as_int(rows[-1].get("epoch"))
-    if end is None:
-        return rows[-180:]
+        return rows[-HISTORY_ROWS:]
+    return [row for row in rows if end - INCIDENT_WINDOW_SECONDS <= (as_int(row.get("epoch")) or 0) <= end]
 
-    window = [
-        row
-        for row in rows
-        if (as_int(row.get("epoch")) or 0) <= end
-        and (as_int(row.get("epoch")) or 0) >= end - INCIDENT_WINDOW_SECONDS
-    ]
-    return window or rows[-180:]
+
+def gpu_summary(value: str | None) -> str:
+    if value in (None, "NA", "disabled"):
+        return "GPU 程序紀錄未啟用"
+    try:
+        report = json.loads(value)
+    except (TypeError, ValueError):
+        report = None
+    if not isinstance(report, dict):
+        return "GPU 程序資料無法讀取"
+    lines = []
+    if report.get("status") != "ok":
+        lines.append("GPU 資料不完整：權限不足、掃描受限或採樣失敗")
+    if report.get("truncated"):
+        lines.append("已達掃描上限，僅列出部分程序")
+    for client in report.get("clients", []):
+        owners = ", ".join(f"{pid} {name}" for pid, name in zip(client["pids"], client["names"]))
+        # A number is a measured percentage; a string names why it is unmeasured.
+        activity = [
+            f"{engine} {reading:.2f}%" if isinstance(reading, (int, float)) else f"{engine} 活動未知"
+            for engine, reading in client.get("engines", {}).items()
+        ]
+        lines.append(f"{owners} · {client['driver']} · " + (", ".join(activity) or "活動未知"))
+    for driver, names in (report.get("unsupported") or {}).items():
+        lines.append(f"{driver} 計數器不支援，僅確認持有裝置：" + ", ".join(names))
+    if report.get("idle"):
+        lines.append("持有裝置、取樣期間無活動：" + ", ".join(report["idle"]))
+    if report.get("protected"):
+        lines.append(f"{report['protected']} 個受保護的程序無法檢查（例如瀏覽器沙箱）")
+    return "\n".join(lines) or "未找到可見的 GPU 裝置持有者；不代表沒有 GPU 活動"
+
+
+REPORT_FIELDS = [
+    "cpu_temp_mC", "gpu_temp_mC", "nvme_temp_mC", "load1",
+    "mem_available_kib", "swap_used_kib", "cpu_psi_avg10", "cpu_psi_full_avg10",
+    "memory_psi_avg10", "memory_psi_full_avg10", "io_psi_avg10", "io_psi_full_avg10",
+    "disk_in_flight", "disk_busy_ms", "dstate_count",
+]
+KERNEL_REPORT_PATTERN = re.compile(
+    r"GPU HANG|GPU hang|GPU reset|NVRM: Xid|ring [a-z0-9_.]+ timeout|"
+    r"hung_task|blocked for more than [0-9]+ seconds|rcu|soft lockup|hard LOCKUP|"
+    r"Kernel panic|BUG: unable to handle|general protection fault|"
+    r"Hardware Error|Machine check|Out of memory|oom-kill|cpu clock throttled|"
+    r"EXT4-fs error|Buffer I/O error|nvme[^ ]*.*?(?:timeout|controller is down|resetting)|"
+    r"ata[0-9]+\.[0-9]+: failed command"
+)
+
+
+def diagnostic_report(incident: Incident) -> str:
+    end = incident_end(incident)
+    if end is None:
+        return "Freeze Watch 診斷報告\n事件時間無效，無法定位資料。\n"
+    start, finish = end - INCIDENT_WINDOW_SECONDS, end + 300
+    moment = datetime.fromtimestamp(end).astimezone().isoformat()
+    kind = "非正常關機／疑似當機，原因未確認" if incident.kind in ("UNCLEAN", "FREEZE") else "取樣停擺"
+    lines = ["Freeze Watch 診斷報告", f"事件：{kind}", f"基準時間：{moment}",
+             "範圍：前 30 分鐘／後 5 分鐘；未記錄的區間不推測。",
+             "隱私：只列數值與核心錯誤分類，省略檔案路徑、程序名稱與參數。", "",
+             "取樣（溫度 m°C、記憶體 KiB、PSI %、磁碟忙碌 ms）", "timestamp\t" + "\t".join(REPORT_FIELDS)]
+    count = 0
+    after = 0
+    for path in incident_paths(incident, include_after=True):
+        for row in metric_window(path, start, finish):
+            epoch = as_int(row["epoch"])
+            values = []
+            for field in REPORT_FIELDS:
+                value = row.get(field, "NA")
+                try:
+                    number = float(value)
+                    values.append(str(number) if math.isfinite(number) else "NA")
+                except (TypeError, ValueError):
+                    values.append("NA")
+            stamp = datetime.fromtimestamp(epoch).astimezone().isoformat()
+            lines.append(stamp + "\t" + "\t".join(values))
+            count += 1
+            after += epoch > end
+    if not count:
+        lines.append("此區間沒有可讀取的取樣。")
+    if not after:
+        lines.append("事件後沒有可讀取的取樣。")
+    lines.extend(["", "相關核心錯誤（分類保留，原始訊息未匯出）"])
+    errors = 0
+    for line in tail_text(STATE_DIR / "events.log", 2_000_000).splitlines():
+        parsed = parse_event_line(line)
+        if parsed is None:
+            continue
+        timestamp, event_kind, message = parsed
+        epoch = epoch_of(timestamp)
+        previous_boot = "previous boot:" in message and timestamp == incident.timestamp
+        if event_kind != "KERNEL" or epoch is None or not (start <= epoch <= finish or previous_boot):
+            continue
+        match = KERNEL_REPORT_PATTERN.search(message)
+        category = match.group() if match is not None else "核心錯誤（詳細資訊省略）"
+        if category.startswith("nvme"):
+            category = "NVMe timeout/reset"
+        lines.append(f"{datetime.fromtimestamp(epoch).astimezone().isoformat()} · {category}")
+        errors += 1
+    if not errors:
+        lines.append("此區間沒有可讀取的核心錯誤紀錄；不代表沒有核心錯誤。")
+    return "\n".join(lines) + "\n"
+
+
+def write_diagnostic_report(path: Path, report: str) -> None:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        os.fchmod(handle.fileno(), 0o600)
+        handle.write(report)
 
 
 def as_float(value: Any) -> float | None:
@@ -450,7 +622,7 @@ def format_process_listing(raw: str | None) -> str:
 def format_incident_summary(incident: Incident) -> str:
     """Turn a raw collector incident message into a concise human summary."""
     message = incident.message
-    if incident.kind == "FREEZE":
+    if incident.kind in ("FREEZE", "UNCLEAN"):
         last_sample = ""
         silent_for = ""
         for token in message.split():
@@ -463,8 +635,10 @@ def format_incident_summary(incident: Incident) -> str:
             details.append(f"最後取樣 {last_sample}")
         if silent_for:
             details.append(f"中斷 {silent_for}")
+        summary = "非正常關機／疑似當機，原因未確認"
         if details:
-            return f"系統非正常關機或凍結（{' · '.join(details)}）"
+            return f"{summary}（{' · '.join(details)}）"
+        return f"{summary}（可能為斷電、強制重啟或當機）"
     if incident.kind == "GAP" and "sampling stalled for" in message:
         return message.replace("sampling stalled for ", "取樣停擺 ").replace(
             ", expected ", "（預期 "
@@ -733,7 +907,7 @@ class ThermalRibbon(Gtk.DrawingArea):
         self.add_controller(motion)
 
     def set_history(self, rows: list[dict[str, str]]) -> None:
-        visible = rows[-180:]
+        visible = rows[-HISTORY_ROWS:]
         self.history = [
             {
                 "timestamp": row.get("timestamp", ""),
@@ -866,6 +1040,7 @@ class FreezeWatch(Gtk.Application):
         self.tray: StatusNotifierItem | None = None
         self.ribbon: ThermalRibbon | None = None
         self.labels: dict[str, Gtk.Label] = {}
+        self.export_button: Gtk.Button | None = None
         self.temperature_cards: dict[str, tuple[Gtk.Label, Gtk.Label, Gtk.Widget]] = {}
         self.container_list: Gtk.ListBox | None = None
         self.event_list: Gtk.ListBox | None = None
@@ -932,6 +1107,10 @@ class FreezeWatch(Gtk.Application):
             .data-list row:hover { background: #1b2931; background-image: none; }
             .data-list row:selected { background: #223640; background-image: none; }
             .data-list row label { color: #dfe8ed; }
+            .data-list row label.safe { color: #79c4d3; }
+            .data-list row label.warm { color: #d8c568; }
+            .data-list row label.hot { color: #f0a046; }
+            .data-list row label.danger { color: #ef6861; }
             .safe { color: #79c4d3; } .warm { color: #d8c568; }
             .hot { color: #f0a046; } .danger { color: #ef6861; }
             .status-pill { font-size: 12px; font-weight: 700; }
@@ -998,6 +1177,10 @@ class FreezeWatch(Gtk.Application):
         refresh_button.set_tooltip_text("立即更新")
         refresh_button.connect("clicked", lambda _button: self.refresh())
         header.pack_end(refresh_button)
+        self.export_button = Gtk.Button(label="預覽診斷報告")
+        self.export_button.set_sensitive(False)
+        self.export_button.connect("clicked", self._preview_report)
+        header.pack_end(self.export_button)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.window.set_titlebar(header)
@@ -1142,6 +1325,13 @@ class FreezeWatch(Gtk.Application):
             self.labels[key].set_max_width_chars(40)
             self.labels[key].set_visible(False)
             content.append(self.labels[key])
+
+        content.append(self._label("GPU 裝置持有者與引擎活動", "section-title"))
+        self.labels["gpu_processes"] = self._label("—", "muted")
+        self.labels["gpu_processes"].set_wrap(True)
+        self.labels["gpu_processes"].set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        self.labels["gpu_processes"].set_max_width_chars(40)
+        content.append(self.labels["gpu_processes"])
 
     @staticmethod
     def _default_window_size() -> tuple[int, int]:
@@ -1301,7 +1491,7 @@ class FreezeWatch(Gtk.Application):
         # plain one does not.
         body_class = (
             "danger"
-            if kind in ("FREEZE", "KERNEL")
+            if kind in ("UNCLEAN", "FREEZE", "KERNEL")
             else ("warm" if kind in ("GAP", "INTERRUPTED", "WARN") else None)
         )
         body = self._label(message, body_class)
@@ -1324,6 +1514,56 @@ class FreezeWatch(Gtk.Application):
             self.incidents[index - 1] if 0 < index <= len(self.incidents) else None
         )
         self.refresh()
+
+    def _preview_report(self, _button) -> Gtk.Window | None:
+        if self.selected_incident is None:
+            return None
+        report = diagnostic_report(self.selected_incident)
+        preview = Gtk.Window(title="診斷報告預覽", transient_for=self.window, modal=True)
+        preview.set_default_size(760, 540)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_margin_top(12)
+        box.set_margin_bottom(12)
+        box.set_margin_start(12)
+        box.set_margin_end(12)
+        preview.set_child(box)
+        view = Gtk.TextView(editable=False, monospace=True)
+        view.get_buffer().set_text(report)
+        scroll = Gtk.ScrolledWindow(hexpand=True, vexpand=True)
+        scroll.set_child(view)
+        box.append(scroll)
+        status = self._label("已省略路徑、程序名稱與參數；確認內容後再儲存。", "muted")
+        status.set_wrap(True)
+        box.append(status)
+        save = Gtk.Button(label="匯出文字檔")
+        save.connect("clicked", lambda _button: self._save_report(preview, report, status))
+        box.append(save)
+        preview.present()
+        return preview
+
+    def _save_report(self, preview: Gtk.Window, report: str, status: Gtk.Label):
+        chooser = Gtk.FileChooserNative.new("匯出診斷報告", preview, Gtk.FileChooserAction.SAVE, "儲存", "取消")
+        chooser.set_current_name("freeze-watch-report.txt")
+
+        def response(dialog, result):
+            if result == Gtk.ResponseType.ACCEPT:
+                file = dialog.get_file()
+                path = file.get_path() if file is not None else None
+                if path is None:
+                    status.set_text("請選擇本機檔案位置。")
+                else:
+                    try:
+                        write_diagnostic_report(Path(path), report)
+                        status.set_text("診斷報告已儲存。")
+                    except OSError as error:
+                        status.set_text(f"無法儲存：{error.strerror}")
+            dialog.destroy()
+            preview.report_chooser = None
+
+        chooser.connect("response", response)
+        preview.report_chooser = chooser
+        chooser.show()
+        return chooser
 
     def _sync_incidents(self) -> None:
         """Keep the selector in step with the log without losing the choice."""
@@ -1413,6 +1653,8 @@ class FreezeWatch(Gtk.Application):
 
         if self.window is None:
             return True
+        if self.export_button is not None:
+            self.export_button.set_sensitive(reviewing)
 
         if self.incident_bar is not None:
             if reviewing:
@@ -1426,7 +1668,7 @@ class FreezeWatch(Gtk.Application):
             incident = self.selected_incident
             if "incident_eyebrow" in self.labels:
                 self.labels["incident_eyebrow"].set_text(
-                    f"正在檢視歷史事故 · {'系統凍結' if incident.kind == 'FREEZE' else '取樣停擺'}"
+                    f"正在檢視歷史事故 · {'非正常關機／疑似當機' if incident.kind in ('FREEZE', 'UNCLEAN') else '取樣停擺'}"
                 )
             self.labels["incident_summary"].set_text(format_incident_summary(incident))
             self.labels["incident_summary"].set_tooltip_text(incident.message)
@@ -1547,6 +1789,7 @@ class FreezeWatch(Gtk.Application):
         for key in ("top_processes", "top_memory_processes"):
             listing = latest_metric.get(key)
             self.labels[key].set_text(format_process_listing(listing))
+        self.labels["gpu_processes"].set_text(gpu_summary(latest_metric.get("gpu_processes")))
 
         if self.ribbon is not None:
             self.ribbon.set_history(metric_rows)
@@ -1557,7 +1800,7 @@ class FreezeWatch(Gtk.Application):
             docker_rows = read_tsv_path(
                 docker_path_for(self.selected_incident.metrics_path), DOCKER_FIELDS, 2_000_000
             )
-            end = epoch_of(self.selected_incident.timestamp)
+            end = incident_end(self.selected_incident)
             if end is not None:
                 docker_rows = [
                     row for row in docker_rows if (as_int(row.get("epoch")) or 0) <= end

@@ -41,11 +41,14 @@ No daemon runs as root.
 
 The collector is read after the fact, so it has to say where an incident was.
 
-Each session writes `START` on entry and `STOP` on a clean exit. A session that
-never wrote `STOP` was cut off, and the next session says so: `FREEZE` when the
-boot id changed, meaning the machine went down without shutting down, and
-`INTERRUPTED` when it did not, meaning only the collector died. Both name the
-last sample that reached disk.
+截至 2026-10-05，每個 session 以 `START`／`STOP` 區分正常停止。缺少
+`STOP` 且 boot id 改變時記為 `UNCLEAN`：只能確認非正常關機，無法區分
+斷電、強制重啟或當機；同 boot 則記為 `INTERRUPTED`。歷史 `FREEZE`
+仍可回顧，但 UI 一律保留「疑似當機、原因未確認」的措辭。
+
+截至 2026-10-05，前次 session 的取樣定位追蹤 `START` 後的所有 `ROTATE`，
+從最新有效取樣檔向前回退，不借用其他 session 的資料。回顧以 `last_sample`
+為窗口終點，涵蓋同 session 的輪替檔；沒有有效取樣時明示缺資料。
 
 `GAP` records a sample that arrived later than three intervals. It answers a
 question the metrics cannot: if samples kept arriving through a reported
@@ -107,6 +110,39 @@ A root on LVM or device-mapper does not resolve that way and reads as missing.
 
 NVMe error counters are deliberately absent: reading them needs root, and the
 kernel log already carries the controller timeouts and resets that matter.
+
+## GPU 程序紀錄與安全匯出
+
+截至 2026-11-04，設定 `FREEZE_WATCH_GPU_PROCESSES=1` 可啟用 `freeze_gpu.py`。
+資料附加於 metrics TSV 最後的 `gpu_processes` JSON 欄位，預設為 `disabled`。
+每列 JSON 只記有活動或活動未知的 client：`engines` 的數字是引擎占比，字串是
+未量到的原因（`baseline`、`counter_regressed`）；取樣期間無活動的持有者只以名稱
+列在 `idle`；已列為有活動、或同時列在 `unsupported`（活動未知）的程式不列入。沒有 client id 或引擎計數器的持有者
+（例如 NVIDIA 專有驅動）依驅動以名稱列在 `unsupported`，不冒充零活動。
+實機（Intel，34 個 client）每列約 0.6 KB，每日約 5 MB。
+採樣讀 `/proc/PID/fd` 與 fdinfo；僅讀 comm，不讀 cmdline。依裝置與
+DRM client-id 去重，使用程序啟動身份辨識 PID 重用；累積引擎 ns 轉為差值，
+首次／缺計數器／計數器回退時不冒充零活動，並依引擎 capacity 換算占比。
+契約依 [Linux 核心文件](https://docs.kernel.org/gpu/drm-usage-stats.html)。
+
+截至 2026-11-04，只掃描本人的程序，PID 新的先掃，讓上限不會遮住剛啟動的程式。
+成本由掃描預算 100 ms 與外層逾時 1 秒限制；512 個程序、每程序 1024 個 fd、
+總計 16384 個 fd、64 個 client、每 client 4 個持有者與 8 個引擎的上限只限制
+記憶體與輸出量。本人但設為不可傾印的程序（瀏覽器沙箱等）記為 `protected`，
+不算採樣失敗；在讀到 fd 清單前就結束的程序直接略過，已確認持有 GPU 卻讀不到
+fdinfo 時才記為 unavailable。截斷或其他讀取失敗才記 truncated／partial；
+無權限或不支援的驅動不影響基本監測。
+私有 gpu-counters.json 保存差值基線，收集器重新啟動時重設 session 身份。
+
+截至 2026-10-05，診斷報告為事件前 30 分鐘／後 5 分鐘的純文字預覽，
+儲存使用與預覽相同的固定文本，權限 0600。數值以允許欄位輸出，省略檔案路徑、
+程序名稱與參數；核心訊息僅保留錯誤分類，原始內容仍留於本機 events.log。
+非正常關機的前次核心證據可能由新 session 讀回，報告標示其讀回時間。
+
+截至 2026-11-04，儀表板讀 TSV 尾端時丟掉被截斷的第一行，即時熱度帶依列數讀滿
+30 分鐘（180 列），不受每列寬度影響；檔案中的無效位元組以替換字元讀取。
+
+最後驗證日期：2026-11-04（GPU 程序紀錄、尾端讀取與報告窗口）。
 
 ## Compatibility
 

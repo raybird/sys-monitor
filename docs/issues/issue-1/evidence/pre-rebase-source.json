@@ -1,0 +1,16 @@
+{
+  "install.sh": "8ad579de0d551dc34107bd10d99e535f4f7230ffb845d34989303e741555ca4b",
+  "scripts/check.sh": "3fc257ff12abadf65444fd5d8444de761a376a1b96e425ce8f49740d010dc8a0",
+  "src/freeze-monitor": "9f15fdbbc131710785fe8abfe419f90c5787640318445a593a74b7f169952ac3",
+  "src/freeze-monitor-maintain": "80737da55fafd9d3a5c60b62b83424ed16f71da745e52db9b20a797e922eb876",
+  "src/freeze-watch": "dcfacb674f30c0edb24fc194a2dfe797e26140327873a4cca36b1fb250f130bc",
+  "src/freeze-watch-session": "cbbf22c366e547cf62c879cdcc2901260f359a8feac0779c701e333c2c178f6f",
+  "src/freeze_gpu.py": "60d48cec6a97ed0eaeaa0bed5ff2e7053c05336acf168342442e84676a6c3878",
+  "src/freeze_watch.py": "0e9e1150ce1114cf030f1a585c7b05e17859b8e15f2afca58378f91bb1bec3ff",
+  "tests/capture_issue1_ui.py": "5e80a2b0542b4072a50175de5f8542f95bc254a491d8ad5f895715b56b61b852",
+  "tests/test_diagnostic_report.py": "182c746d0c35d5e7d9f277373a5ff56ab7a8dc6d870dc6533ee80c6f02235d08",
+  "tests/test_freeze_watch.py": "ecc35a7847121b003fceaa544f6650fb0eda615a7586799e4c0494cceb4bceee",
+  "tests/test_gpu_sample.py": "da5897dbac02b776705771652e4580b05eb03ca039e7d7ee3a9dd301ceace803",
+  "tests/test_previous_session.py": "3d3c3ef8b5615891c213fe93276c1e568117068485a33672987e215536b3e9a5",
+  "tests/test_window_layout.py": "16223cdce7b4576999ed1779e4c4867030d64252ffed5ecb81be5835bf04bfd2"
+}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 import unittest
 from datetime import datetime
@@ -98,7 +99,7 @@ class IncidentTests(unittest.TestCase):
         freeze_watch.STATE_DIR = self.old_state_dir
         self.temp_dir.cleanup()
 
-    def write_metrics(self, name: str, start_epoch: int, count: int) -> Path:
+    def write_metrics(self, name: str, start_epoch: int, count: int, pad: int = 0) -> Path:
         path = self.state / name
         lines = ["\t".join(freeze_watch.METRICS_FIELDS)]
         for index in range(count):
@@ -107,6 +108,9 @@ class IncidentTests(unittest.TestCase):
             row["timestamp"] = datetime.fromtimestamp(epoch).isoformat()
             row["epoch"] = str(epoch)
             row["cpu_temp_mC"] = str(50000 + index * 100)
+            if pad:
+                # Uneven widths, like real GPU JSON, so a byte cut lands mid-row.
+                row["gpu_processes"] = "g" * (pad + index % 97)
             lines.append("\t".join(row[field] for field in freeze_watch.METRICS_FIELDS))
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
         return path
@@ -174,6 +178,92 @@ class IncidentTests(unittest.TestCase):
             Path("/s/docker-2026-08-09T10-00-00-ab.tsv"),
         )
         self.assertIsNone(freeze_watch.docker_path_for(None))
+
+    def test_scn004_old_and_new_unclean_events_use_uncertain_labels(self):
+        for kind in ("FREEZE", "UNCLEAN"):
+            incident = freeze_watch.Incident("2026-10-05T00:00:00+00:00", kind, "", None)
+            self.assertIn("疑似當機", incident.label)
+
+    def test_scn002_review_anchors_on_last_sample_and_crosses_rotation(self):
+        first = self.write_metrics("metrics-first.tsv", 1700000000, 3)
+        second = self.write_metrics("metrics-second.tsv", 1700000030, 3)
+        last = datetime.fromtimestamp(1700000050).isoformat()
+        restart = datetime.fromtimestamp(1700100000).isoformat()
+        self.write_events(
+            f"{last}\tSTART\tboot=old metrics={first}",
+            f"{last}\tROTATE\tmetrics={second}",
+            f"{restart}\tUNCLEAN\tlast_sample={last} metrics={second}",
+        )
+        incidents = freeze_watch.read_incidents()
+        self.assertEqual(len(incidents), 1)
+        rows = freeze_watch.incident_rows(incidents[0])
+        self.assertEqual([int(row["epoch"]) for row in rows],
+                         [1700000000, 1700000010, 1700000020, 1700000030, 1700000040, 1700000050])
+
+    def test_scn006_old_stall_still_has_data_after_the_file_grows(self):
+        metrics = self.write_metrics("metrics-grown.tsv", 1700000000, 40000)
+        stamp = datetime.fromtimestamp(1700001000).isoformat()
+        self.write_events(f"{stamp}\tGAP\tsampling stalled")
+        incident = freeze_watch.read_incidents()[0]
+        self.assertEqual(incident.metrics_path, metrics)
+        rows = freeze_watch.incident_rows(incident)
+        self.assertEqual(int(rows[0]["epoch"]), 1700000000)
+        self.assertEqual(int(rows[-1]["epoch"]), 1700001000)
+        report = freeze_watch.diagnostic_report(incident)
+        self.assertIn("\t50000.0\t", report)
+        self.assertIn("\t63000.0\t", report)
+        self.assertNotIn("\t63100.0\t", report)
+
+
+    def test_review_survives_a_tail_cut_inside_a_row(self):
+        metrics = self.write_metrics("metrics-ragged.tsv", 1700000000, 2000, pad=4400)
+        data = metrics.read_bytes()
+        self.assertNotEqual(data[len(data) - 4_000_000 - 1:len(data) - 4_000_000], b"\n")
+        stamp = datetime.fromtimestamp(1700003000).isoformat()
+        self.write_events(f"{stamp}\tGAP\tsampling stalled")
+        incident = freeze_watch.read_incidents()[0]
+        rows = freeze_watch.incident_rows(incident)
+        self.assertEqual(len(rows), 181)
+        self.assertEqual(int(rows[0]["epoch"]), 1700001200)
+        self.assertEqual(int(rows[-1]["epoch"]), 1700003000)
+
+    def test_live_tail_keeps_half_an_hour_of_wide_rows(self):
+        self.write_metrics("metrics-wide.tsv", 1700000000, 360, pad=4400)
+        rows = freeze_watch.read_tsv_tail("metrics-*.tsv", freeze_watch.METRICS_FIELDS)
+        self.assertGreaterEqual(len(rows), 180)
+        self.assertTrue(all(row["epoch"].isdigit() for row in rows))
+        self.assertEqual(int(rows[-1]["epoch"]), 1700003590)
+
+    def test_invalid_bytes_do_not_stop_the_review(self):
+        metrics = self.write_metrics("metrics-bad.tsv", 1700000000, 200)
+        with metrics.open("ab") as handle:
+            handle.write(b"\xff\xfe broken\n")
+        stamp = datetime.fromtimestamp(1700001000).isoformat()
+        self.write_events(f"{stamp}\tGAP\tsampling stalled")
+        incident = freeze_watch.read_incidents()[0]
+        self.assertEqual(incident.metrics_path, metrics)
+        self.assertTrue(freeze_watch.incident_rows(incident))
+        self.assertIn("\t60000.0\t", freeze_watch.diagnostic_report(incident))
+
+
+class GpuSummaryTests(unittest.TestCase):
+    def test_activity_unmeasured_engines_and_idle_holders_read_apart(self):
+        raw = json.dumps({
+            "status": "ok", "truncated": False, "unavailable": 0,
+            "clients": [
+                {"driver": "i915", "device": "0000:00:02.0", "client": "21", "pids": [6926],
+                 "names": ["gnome-shell"], "state": "sampled",
+                 "engines": {"render": 1.66, "video": "baseline"}},
+            ],
+            "idle": ["Xwayland"], "unsupported": {"nvidia": ["game", "Xorg"]}, "protected": 3,
+        })
+        text = freeze_watch.gpu_summary(raw)
+        self.assertIn("6926 gnome-shell · i915 · render 1.66%, video 活動未知", text)
+        self.assertIn("nvidia 計數器不支援，僅確認持有裝置：game, Xorg", text)
+        self.assertIn("持有裝置、取樣期間無活動：Xwayland", text)
+        self.assertIn("3 個受保護的程序無法檢查", text)
+        self.assertNotIn("不完整", text)
+        self.assertEqual(freeze_watch.gpu_summary("[]"), "GPU 程序資料無法讀取")
 
 
 class StallPositionTests(unittest.TestCase):
@@ -310,6 +400,8 @@ class SystemMetricLevelTests(unittest.TestCase):
         summary = freeze_watch.format_incident_summary(freeze_inc)
         self.assertIn("最後取樣 2026-10-22 22:04:49", summary)
         self.assertIn("中斷 30303s", summary)
+        self.assertIn("原因未確認", summary)
+        self.assertNotIn("凍結", summary)
 
 
 if __name__ == "__main__":

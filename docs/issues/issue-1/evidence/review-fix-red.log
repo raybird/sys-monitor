@@ -1,0 +1,208 @@
+# 2026-11-04T10:45:20+08:00 git archive a3e841c 的 src、uninstall.sh，加上修正後的 tests 與 scripts/check.sh
+$ GDK_BACKEND=x11 GSK_RENDERER=cairo xvfb-run -a /usr/bin/python3 -m unittest discover -s tests
+  AbstractEventLoopPolicy = getattr(asyncio, "AbstractEventLoopPolicy", object)
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+  Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+  foreground = widget.get_style_context().get_color()
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+......
+======================================================================
+ERROR: test_activity_unmeasured_engines_and_idle_holders_read_apart (test_freeze_watch.GpuSummaryTests.test_activity_unmeasured_engines_and_idle_holders_read_apart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_freeze_watch.py", line 262, in test_activity_unmeasured_engines_and_idle_holders_read_apart
+    text = freeze_watch.gpu_summary(raw)
+  File "<isolated-copy>/src/freeze_watch.py", line 278, in gpu_summary
+    pct = reading.get("pct")
+          ^^^^^^^^^^^
+AttributeError: 'float' object has no attribute 'get'
+
+======================================================================
+ERROR: test_scn005_newest_processes_are_scanned_first_when_capped (test_gpu_sample.GpuSampleTests.test_scn005_newest_processes_are_scanned_first_when_capped)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 132, in test_scn005_newest_processes_are_scanned_first_when_capped
+    with mock.patch.object(gpu, "MAX_PROCESSES", 1):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1510, in __enter__
+    original, local = self.get_original()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1480, in get_original
+    raise AttributeError(
+        "%s does not have the attribute %r" % (target, name)
+    )
+AttributeError: <module 'gpu_sample' from '<isolated-copy>/src/freeze_gpu.py'> does not have the attribute 'MAX_PROCESSES'
+
+======================================================================
+ERROR: test_scn005_non_utf8_process_name_does_not_fail_the_sample (test_gpu_sample.GpuSampleTests.test_scn005_non_utf8_process_name_does_not_fail_the_sample)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 140, in test_scn005_non_utf8_process_name_does_not_fail_the_sample
+    report, _ = gpu.sample_gpu(self.proc, {}, 1000)
+                ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "<isolated-copy>/src/freeze_gpu.py", line 34, in sample_gpu
+    name = process.joinpath("comm").read_text()[:32].strip().replace("\t", " ").replace("\n", " ")
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/pathlib/__init__.py", line 789, in read_text
+    return f.read()
+           ~~~~~~^^
+  File "<frozen codecs>", line 325, in decode
+UnicodeDecodeError: 'utf-8' codec can't decode bytes in position 13-14: invalid continuation byte
+
+======================================================================
+FAIL: test_invalid_bytes_do_not_stop_the_review (test_freeze_watch.IncidentTests.test_invalid_bytes_do_not_stop_the_review)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_freeze_watch.py", line 244, in test_invalid_bytes_do_not_stop_the_review
+    self.assertEqual(incident.metrics_path, metrics)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != PosixPath('<tmp>/metrics-bad.tsv')
+
+======================================================================
+FAIL: test_live_tail_keeps_half_an_hour_of_wide_rows (test_freeze_watch.IncidentTests.test_live_tail_keeps_half_an_hour_of_wide_rows)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_freeze_watch.py", line 233, in test_live_tail_keeps_half_an_hour_of_wide_rows
+    self.assertGreaterEqual(len(rows), 180)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: 35 not greater than or equal to 180
+
+======================================================================
+FAIL: test_review_survives_a_tail_cut_inside_a_row (test_freeze_watch.IncidentTests.test_review_survives_a_tail_cut_inside_a_row)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_freeze_watch.py", line 226, in test_review_survives_a_tail_cut_inside_a_row
+    self.assertEqual(len(rows), 181)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^
+AssertionError: 0 != 181
+
+======================================================================
+FAIL: test_scn005_holder_baseline_then_active_delta_and_idle (test_gpu_sample.GpuSampleTests.test_scn005_holder_baseline_then_active_delta_and_idle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 42, in test_scn005_holder_baseline_then_active_delta_and_idle
+    self.assertEqual(report["clients"][0]["engines"]["render"], "baseline")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'busy_ns': None, 'pct': None, 'state': 'baseline'} != 'baseline'
+
+======================================================================
+FAIL: test_scn005_missing_counters_exited_fd_and_capacity (test_gpu_sample.GpuSampleTests.test_scn005_missing_counters_exited_fd_and_capacity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 81, in test_scn005_missing_counters_exited_fd_and_capacity
+    self.assertEqual(report["clients"][0]["engines"]["render"], 25.0)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'busy_ns': 500, 'pct': 25.0, 'state': 'sampled'} != 25.0
+
+======================================================================
+FAIL: test_scn005_other_users_are_skipped_not_unavailable (test_gpu_sample.GpuSampleTests.test_scn005_other_users_are_skipped_not_unavailable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 127, in test_scn005_other_users_are_skipped_not_unavailable
+    self.assertEqual(report["clients"], [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [{'driver': 'amdgpu', 'device': '0000:01:0[151 chars]'}}}] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+{'driver': 'amdgpu', 'device': '0000:01:00.0', 'client': '7', 'pids': [123], 'names': ['gpu-owner'], 'state': 'sampled', 'engines': {'render': {'busy_ns': None, 'pct': None, 'state': 'baseline'}}}
+
++ []
+- [{'client': '7',
+-   'device': '0000:01:00.0',
+-   'driver': 'amdgpu',
+-   'engines': {'render': {'busy_ns': None, 'pct': None, 'state': 'baseline'}},
+-   'names': ['gpu-owner'],
+-   'pids': [123],
+-   'state': 'sampled'}]
+
+======================================================================
+FAIL: test_scn005_protected_own_process_is_counted_apart (test_gpu_sample.GpuSampleTests.test_scn005_protected_own_process_is_counted_apart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 116, in test_scn005_protected_own_process_is_counted_apart
+    self.assertEqual(report["status"], "ok")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'partial' != 'ok'
+- partial
++ ok
+
+
+======================================================================
+FAIL: test_scn005_regressed_counter_holds_baseline_until_catch_up (test_gpu_sample.GpuSampleTests.test_scn005_regressed_counter_holds_baseline_until_catch_up)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 64, in test_scn005_regressed_counter_holds_baseline_until_catch_up
+    self.assertEqual(report["clients"][0]["engines"]["render"], "counter_regressed")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'busy_ns': None, 'pct': None, 'state': 'counter_regressed'} != 'counter_regressed'
+
+======================================================================
+FAIL: test_scn005_reused_pid_is_a_new_baseline (test_gpu_sample.GpuSampleTests.test_scn005_reused_pid_is_a_new_baseline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 74, in test_scn005_reused_pid_is_a_new_baseline
+    self.assertEqual(report["clients"][0]["engines"]["render"], "baseline")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: {'busy_ns': None, 'pct': None, 'state': 'baseline'} != 'baseline'
+
+======================================================================
+FAIL: test_scn005_opt_in_is_recorded_and_counter_state_is_private (test_previous_session.PreviousSessionTests.test_scn005_opt_in_is_recorded_and_counter_state_is_private)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_previous_session.py", line 137, in test_scn005_opt_in_is_recorded_and_counter_state_is_private
+    self.assertEqual(data["clients"], [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [{'driver': 'amdgpu', 'device': 'global:am[147 chars]'}}}] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+{'driver': 'amdgpu', 'device': 'global:amdgpu', 'client': '7', 'pids': [123], 'names': ['gpu-owner'], 'state': 'sampled', 'engines': {'render': {'busy_ns': 0, 'pct': 0.0, 'state': 'sampled'}}}
+
++ []
+- [{'client': '7',
+-   'device': 'global:amdgpu',
+-   'driver': 'amdgpu',
+-   'engines': {'render': {'busy_ns': 0, 'pct': 0.0, 'state': 'sampled'}},
+-   'names': ['gpu-owner'],
+-   'pids': [123],
+-   'state': 'sampled'}]
+
+----------------------------------------------------------------------
+Ran 71 tests in 22.691s
+
+FAILED (failures=10, errors=3)
+exit=1
+$ GDK_BACKEND=x11 GSK_RENDERER=cairo xvfb-run -a bash scripts/check.sh
+exit=1

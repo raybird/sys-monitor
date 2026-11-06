@@ -1,0 +1,112 @@
+# 2026-11-04T11:13:45+08:00 git archive 61a93c3 的 src，加上第二輪修正後的 tests
+$ GDK_BACKEND=x11 GSK_RENDERER=cairo xvfb-run -a /usr/bin/python3 -m unittest discover -s tests
+  AbstractEventLoopPolicy = getattr(asyncio, "AbstractEventLoopPolicy", object)
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+  Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+  foreground = widget.get_style_context().get_color()
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+....F..
+======================================================================
+FAIL: test_activity_unmeasured_engines_and_idle_holders_read_apart (test_freeze_watch.GpuSummaryTests.test_activity_unmeasured_engines_and_idle_holders_read_apart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_freeze_watch.py", line 262, in test_activity_unmeasured_engines_and_idle_holders_read_apart
+    self.assertIn("nvidia 計數器不支援，僅確認持有裝置：game, Xorg", text)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'nvidia 計數器不支援，僅確認持有裝置：game, Xorg' not found in '6926 gnome-shell · i915 · render 1.66%, video 活動未知\n持有裝置、取樣期間無活動：Xwayland\n3 個受保護的程序無法檢查（例如瀏覽器沙箱）'
+
+======================================================================
+FAIL: test_scn005_active_name_is_not_also_listed_idle (test_gpu_sample.GpuSampleTests.test_scn005_active_name_is_not_also_listed_idle)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 149, in test_scn005_active_name_is_not_also_listed_idle
+    self.assertEqual(report["idle"], [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['gpu-owner'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'gpu-owner'
+
+- ['gpu-owner']
++ []
+
+======================================================================
+FAIL: test_scn005_driver_without_client_ids_is_listed_by_name (test_gpu_sample.GpuSampleTests.test_scn005_driver_without_client_ids_is_listed_by_name)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 136, in test_scn005_driver_without_client_ids_is_listed_by_name
+    self.assertEqual(report["status"], "ok")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'partial' != 'ok'
+- partial
++ ok
+
+
+======================================================================
+FAIL: test_scn005_missing_counters_exited_fd_and_capacity (test_gpu_sample.GpuSampleTests.test_scn005_missing_counters_exited_fd_and_capacity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_gpu_sample.py", line 85, in test_scn005_missing_counters_exited_fd_and_capacity
+    self.assertEqual(report["clients"], [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [{'driver': 'amdgpu', 'device': 'global:am[104 chars] {}}] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+{'driver': 'amdgpu', 'device': 'global:amdgpu', 'client': '7', 'pids': [123], 'names': ['gpu-owner'], 'state': 'unsupported_counters', 'engines': {}}
+
++ []
+- [{'client': '7',
+-   'device': 'global:amdgpu',
+-   'driver': 'amdgpu',
+-   'engines': {},
+-   'names': ['gpu-owner'],
+-   'pids': [123],
+-   'state': 'unsupported_counters'}]
+
+======================================================================
+FAIL: test_unclean_event_is_marked_as_danger (test_window_layout.RowWidthTests.test_unclean_event_is_marked_as_danger)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<isolated-copy>/tests/test_window_layout.py", line 102, in test_unclean_event_is_marked_as_danger
+    self.assertIn("danger", rows[0])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: 'danger' not found in []
+
+----------------------------------------------------------------------
+Ran 74 tests in 22.811s
+
+FAILED (failures=5)
+exit=1

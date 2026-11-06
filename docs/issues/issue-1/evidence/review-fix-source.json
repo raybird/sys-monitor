@@ -1,0 +1,19 @@
+{
+ "date": "2026-11-04",
+ "note": "\u5be9\u67e5\u4fee\u6b63\u5f8c\u3001\u63d0\u4ea4\u524d\u7684\u5de5\u4f5c\u5340\uff1b\u57fa\u5e95\u63d0\u4ea4\u898b base",
+ "base": "a3e841cc5885fe407818b3babdc453c4eee03e36",
+ "sha256": {
+  "src/freeze_gpu.py": "114d593741d735945293fee6367c5acc514462d4a595ddd6b293c294dbb47806",
+  "src/freeze_watch.py": "70adfce3ea4e99fe60a8a090907f20b4e87a566658df76dc4feca596a35fbfa0",
+  "src/freeze-monitor": "9f15fdbbc131710785fe8abfe419f90c5787640318445a593a74b7f169952ac3",
+  "uninstall.sh": "439744132d2e9f2d2b098beb9c4f5cde43b9c0b40423277c3114c8a27da9a049",
+  "install.sh": "8ad579de0d551dc34107bd10d99e535f4f7230ffb845d34989303e741555ca4b",
+  "scripts/check.sh": "6991686cfc328c6b8c005e19f25395d1efd65d1ef1d54fae1ae74d2e7fa895fb",
+  "tests/test_freeze_watch.py": "097815b6641a10d5836cf7484f96330295c766599dbaaebeca0761bb30f39397",
+  "tests/test_gpu_sample.py": "e010a7e2bb159f081e3fa46be99a375af9ea8f7d6e9a4f4238c064408d6f0a66",
+  "tests/test_previous_session.py": "e3d2456804bc17e126141595a5918b85c0d15bbebfac8851e761430622d5e638",
+  "tests/test_window_layout.py": "395caed3a5f553564beb21857c534f4848e1a8f08140ea1817c9670168a3c136",
+  "tests/test_diagnostic_report.py": "182c746d0c35d5e7d9f277373a5ff56ab7a8dc6d870dc6533ee80c6f02235d08",
+  "tests/capture_issue1_ui.py": "5e80a2b0542b4072a50175de5f8542f95bc254a491d8ad5f895715b56b61b852"
+ }
+}

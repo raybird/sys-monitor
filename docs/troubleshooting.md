@@ -117,6 +117,20 @@ docker ps
 Do not add a user to the Docker group without understanding that it grants
 root-equivalent control of the host.
 
+## 診斷限制與 GPU 活動
+
+截至 2026-10-05，`UNCLEAN` 與歷史 `FREEZE` 只表示非正常關機／疑似當機。
+應比對最後取樣、壓力、溫度與核心訊息，不把缺 STOP 當成已確認的 GPU 故障。
+同 session 的跨日輪替會追蹤最新有效檔；缺失或空檔回退，全部不可用時顯示 unknown。
+
+截至 2026-11-04，GPU 程序紀錄必須以 `FREEZE_WATCH_GPU_PROCESSES=1` 啟用。
+權限不足、不支援 DRM 計數器與採樣上限都會顯示限制；「活動未知」與「0%」
+意義不同。只檢查本人的程序；瀏覽器沙箱這類受保護的程序無法檢查，會另外列出
+數量，不算資料不完整。「持有裝置、取樣期間無活動」列出的是有開 GPU 但沒在用的程式。預設不要求 root，也不會變更使用者群組。報告預覽只列安全的
+數值與錯誤分類；需要完整原始核心訊息時，在本機檢查 events.log。
+
+最後驗證日期：2026-11-04（GPU 活動判讀）。
+
 ## Logs
 
 ```bash

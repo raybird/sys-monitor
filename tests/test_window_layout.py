@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -85,6 +86,50 @@ class RowWidthTests(unittest.TestCase):
         self.assertLess(
             self.minimum_width(self.app.event_list), self.BOUNDED_WIDTH
         )
+
+    def test_unclean_event_is_marked_as_danger(self) -> None:
+        # The collector writes UNCLEAN where it used to write FREEZE, so it
+        # must carry the same severity in the event list.
+        self.app.event_list = Gtk.ListBox()
+        for kind in ("UNCLEAN", "FREEZE", "INTERRUPTED"):
+            self.app._append_event_row(f"2026-11-04T00:00:00+08:00\t{kind}\tprevious session ended")
+        rows = []
+        row = self.app.event_list.get_first_child()
+        while row:
+            body = row.get_child().get_first_child()
+            rows.append(body.get_css_classes())
+            row = row.get_next_sibling()
+        self.assertIn("danger", rows[0])
+        self.assertIn("danger", rows[1])
+        self.assertIn("warm", rows[2])
+
+    def test_event_severity_colour_is_what_is_drawn(self) -> None:
+        # The class alone proves nothing if a broader rule paints over it, so
+        # read the colour GTK actually resolves inside a styled event list.
+        self.app._install_css()
+        self.app.event_list = Gtk.ListBox()
+        self.app.event_list.add_css_class("data-list")
+        window = Gtk.Window()
+        window.set_child(self.app.event_list)
+        for kind in ("UNCLEAN", "INTERRUPTED", "STOP"):
+            self.app._append_event_row(f"2026-11-04T00:00:00+08:00\t{kind}\tprevious session ended")
+        colours = []
+        row = self.app.event_list.get_first_child()
+        while row:
+            colour = row.get_child().get_first_child().get_style_context().get_color()
+            colours.append(tuple(round(channel * 255) for channel in (colour.red, colour.green, colour.blue)))
+            row = row.get_next_sibling()
+        process_list = Gtk.ListBox()
+        process_list.add_css_class("data-list")
+        window.set_child(process_list)
+        self.app._append_process_row(process_list, "busy", "98.5%", "1.0%")
+        detail = process_list.get_first_child().get_child().get_last_child().get_style_context().get_color()
+        window.destroy()
+        self.assertEqual(tuple(round(channel * 255) for channel in (detail.red, detail.green, detail.blue)),
+                         (0xF0, 0xA0, 0x46))
+        self.assertEqual(colours[0], (0xEF, 0x68, 0x61))
+        self.assertEqual(colours[1], (0xD8, 0xC5, 0x68))
+        self.assertEqual(colours[2], (0xDF, 0xE8, 0xED))
 
     def test_container_rows_stay_shrinkable(self) -> None:
         self.app.container_list = Gtk.ListBox()
@@ -193,6 +238,109 @@ class ClampTests(unittest.TestCase):
 
     def test_never_goes_below_the_minimum(self) -> None:
         self.assertEqual(freeze_watch.clamp_window_size(640, 480), (720, 540))
+
+
+@unittest.skipUnless(HAS_DISPLAY, "no display available")
+class DropdownContrastTests(unittest.TestCase):
+    def test_scn001_light_dark_normal_hover_selected_contrast(self):
+        import cairo
+        from gi.repository import GLib
+
+        def descendants(widget):
+            yield widget
+            child = widget.get_first_child()
+            while child:
+                yield from descendants(child)
+                child = child.get_next_sibling()
+
+        def luminance(channels):
+            linear = [v / 12.92 if v <= 0.04045 else ((v + 0.055) / 1.055) ** 2.4 for v in channels]
+            return sum(v * weight for v, weight in zip(linear, (0.2126, 0.7152, 0.0722)))
+
+        Gtk.init()
+        settings = Gtk.Settings.get_default()
+        old_dark = settings.get_property("gtk-application-prefer-dark-theme")
+        old_theme = settings.get_property("gtk-theme-name")
+        old_animations = settings.get_property("gtk-enable-animations")
+        settings.set_property("gtk-enable-animations", False)
+        app = freeze_watch.FreezeWatch(True)
+        app._install_css()
+        try:
+            # The host theme and a fixed Adwaita, so the result does not
+            # depend only on whatever theme the test machine happens to use.
+            for theme, dark in [(name, dark) for name in dict.fromkeys((old_theme, "Adwaita"))
+                                for dark in (False, True)]:
+                settings.set_property("gtk-theme-name", theme)
+                settings.set_property("gtk-application-prefer-dark-theme", dark)
+                window = Gtk.Window()
+                dropdown = Gtk.DropDown.new_from_strings(["即時監測", "非正常關機／疑似當機"])
+                window.set_child(dropdown)
+                window.present()
+                while GLib.MainContext.default().pending():
+                    GLib.MainContext.default().iteration(False)
+                rows = [widget for widget in descendants(dropdown)
+                        if widget.get_css_name() == "row" and widget.get_parent().get_css_name() == "listview"]
+                self.assertEqual(len(rows), 2)
+                for state in (Gtk.StateFlags.NORMAL, Gtk.StateFlags.PRELIGHT, Gtk.StateFlags.SELECTED):
+                    row = rows[1]
+                    row.unset_state_flags(Gtk.StateFlags.PRELIGHT | Gtk.StateFlags.SELECTED)
+                    row.set_state_flags(state, False)
+                    surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, 20, 20)
+                    ancestors = []
+                    ancestor = row
+                    while ancestor:
+                        ancestors.append(ancestor)
+                        ancestor = ancestor.get_parent()
+                    for ancestor in reversed(ancestors):
+                        Gtk.render_background(ancestor.get_style_context(), cairo.Context(surface), 0, 0, 20, 20)
+                    blue, green, red, alpha = surface.get_data()[:4]
+                    self.assertEqual(alpha, 255)
+                    bg = luminance([red / 255, green / 255, blue / 255])
+                    # The label and the selection check mark both have to read.
+                    marks = [widget for widget in descendants(row)
+                             if widget.get_css_name() in ("label", "image")]
+                    self.assertTrue(any(widget.get_css_name() == "label" for widget in marks))
+                    for widget in marks:
+                        foreground = widget.get_style_context().get_color()
+                        fg = luminance([foreground.red, foreground.green, foreground.blue])
+                        ratio = (max(bg, fg) + 0.05) / (min(bg, fg) + 0.05)
+                        with self.subTest(theme=theme, dark=dark, state=state, part=widget.get_css_name()):
+                            self.assertGreaterEqual(ratio, 4.5)
+                window.destroy()
+        finally:
+            settings.set_property("gtk-application-prefer-dark-theme", old_dark)
+            settings.set_property("gtk-theme-name", old_theme)
+            settings.set_property("gtk-enable-animations", old_animations)
+
+
+@unittest.skipUnless(HAS_DISPLAY, "no display available")
+class ReportPreviewTests(unittest.TestCase):
+    def test_scn006_preview_does_not_write_and_cancel_keeps_it_readonly(self):
+        Gtk.init()
+        app = freeze_watch.FreezeWatch(True)
+        app.window = Gtk.Window()
+        app.selected_incident = freeze_watch.Incident("2026-10-05T00:00:00+00:00", "UNCLEAN", "", None)
+        old = freeze_watch.STATE_DIR
+        with tempfile.TemporaryDirectory() as directory:
+            freeze_watch.STATE_DIR = Path(directory)
+            try:
+                preview = app._preview_report(None)
+                self.assertIsNotNone(preview)
+                box = preview.get_child()
+                view = box.get_first_child().get_child()
+                buffer = view.get_buffer()
+                text = buffer.get_text(buffer.get_start_iter(), buffer.get_end_iter(), True)
+                self.assertIn("原因未確認", text)
+                self.assertFalse(view.get_editable())
+                self.assertEqual(list(Path(directory).iterdir()), [])
+                status = box.get_first_child().get_next_sibling()
+                chooser = app._save_report(preview, text, status)
+                chooser.emit("response", Gtk.ResponseType.CANCEL)
+                self.assertEqual(list(Path(directory).iterdir()), [])
+                preview.destroy()
+            finally:
+                freeze_watch.STATE_DIR = old
+                app.window.destroy()
 
 
 if __name__ == "__main__":

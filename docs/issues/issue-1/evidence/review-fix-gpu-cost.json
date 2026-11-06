@@ -1,0 +1,146 @@
+{
+ "measured_at": "2026-11-04T10:48:00+0800",
+ "host": "本機桌面，真實 /proc；GPU 為 Intel i915",
+ "command": "LC_ALL=C /usr/bin/python3 -I freeze_gpu_{old,new}.py --state <tmp> --session m，每 10 秒一次、各 6 次；第 1 次為基線",
+ "proc_count": 636,
+ "baseline_metrics_bytes_2026_11_03": 2556823,
+ "note": "old 為 rebase 前 backup/issue-1-pre-rebase 的 freeze_gpu.py；程序名稱與 PID 不保存，只留計數",
+ "old": {
+  "runs": [
+   {
+    "wall_ms": 61.2,
+    "cpu_ms": 60.9,
+    "bytes": 4612,
+    "status": "partial",
+    "truncated": true,
+    "unavailable": 280,
+    "clients": 13,
+    "idle": 0
+   },
+   {
+    "wall_ms": 61.8,
+    "cpu_ms": 61.6,
+    "bytes": 4365,
+    "status": "partial",
+    "truncated": true,
+    "unavailable": 280,
+    "clients": 13,
+    "idle": 0
+   },
+   {
+    "wall_ms": 63.0,
+    "cpu_ms": 62.7,
+    "bytes": 4366,
+    "status": "partial",
+    "truncated": true,
+    "unavailable": 280,
+    "clients": 13,
+    "idle": 0
+   },
+   {
+    "wall_ms": 63.1,
+    "cpu_ms": 62.8,
+    "bytes": 4366,
+    "status": "partial",
+    "truncated": true,
+    "unavailable": 280,
+    "clients": 13,
+    "idle": 0
+   },
+   {
+    "wall_ms": 61.8,
+    "cpu_ms": 61.5,
+    "bytes": 4366,
+    "status": "partial",
+    "truncated": true,
+    "unavailable": 280,
+    "clients": 13,
+    "idle": 0
+   },
+   {
+    "wall_ms": 68.2,
+    "cpu_ms": 67.9,
+    "bytes": 4379,
+    "status": "partial",
+    "truncated": true,
+    "unavailable": 280,
+    "clients": 13,
+    "idle": 0
+   }
+  ],
+  "median_wall_ms": 63.0,
+  "median_cpu_ms": 62.7,
+  "steady_bytes_max": 4379,
+  "daily_bytes_at_8640_rows": 37834560,
+  "last_protected": null
+ },
+ "new": {
+  "runs": [
+   {
+    "wall_ms": 78.9,
+    "cpu_ms": 78.6,
+    "bytes": 7175,
+    "status": "ok",
+    "truncated": false,
+    "unavailable": 0,
+    "clients": 34,
+    "idle": 0
+   },
+   {
+    "wall_ms": 82.0,
+    "cpu_ms": 81.7,
+    "bytes": 605,
+    "status": "ok",
+    "truncated": false,
+    "unavailable": 0,
+    "clients": 3,
+    "idle": 10
+   },
+   {
+    "wall_ms": 83.8,
+    "cpu_ms": 83.5,
+    "bytes": 603,
+    "status": "ok",
+    "truncated": false,
+    "unavailable": 0,
+    "clients": 3,
+    "idle": 10
+   },
+   {
+    "wall_ms": 126.1,
+    "cpu_ms": 125.4,
+    "bytes": 605,
+    "status": "ok",
+    "truncated": false,
+    "unavailable": 0,
+    "clients": 3,
+    "idle": 10
+   },
+   {
+    "wall_ms": 137.8,
+    "cpu_ms": 125.7,
+    "bytes": 604,
+    "status": "ok",
+    "truncated": false,
+    "unavailable": 0,
+    "clients": 3,
+    "idle": 10
+   },
+   {
+    "wall_ms": 96.1,
+    "cpu_ms": 94.9,
+    "bytes": 605,
+    "status": "ok",
+    "truncated": false,
+    "unavailable": 0,
+    "clients": 3,
+    "idle": 10
+   }
+  ],
+  "median_wall_ms": 96.1,
+  "median_cpu_ms": 94.9,
+  "steady_bytes_max": 605,
+  "daily_bytes_at_8640_rows": 5227200,
+  "last_protected": 36
+ }
+}

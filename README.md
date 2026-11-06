@@ -135,6 +135,23 @@ Collected data is stored in:
 ~/.local/state/freeze-monitor/
 ```
 
+## GPU 程序紀錄與診斷匯出
+
+截至 2026-10-05，GPU 程序紀錄預設關閉。需要時在
+`~/.config/freeze-watch/env` 設定 `FREEZE_WATCH_GPU_PROCESSES=1`，再執行
+`systemctl --user restart freeze-monitor.service`；安裝器升級會保留此設定。
+此功能讀取 Linux DRM fdinfo（例如 AMD／Intel），其他驅動或無權限時明確
+顯示資料不完整或計數器不支援。持有裝置不等於正在使用 GPU，首次採樣活動未知。
+截至 2026-11-04，只檢查本人的程序，受保護的程序（例如瀏覽器沙箱）另列數量；
+啟用後 metrics 檔每日約增加 5 MB（實機 34 個 GPU client）。
+
+截至 2026-10-05，選取事件後可按「預覽診斷報告」，確認內容後再匯出文字檔。
+報告涵蓋事件前 30 分鐘／後 5 分鐘，省略路徑、程序名稱與參數，核心訊息僅列
+錯誤分類；缺資料會明示。缺少正常停止紀錄僅代表非正常關機／疑似當機，不能
+單憑此條件確認硬體或 GPU 故障。
+
+最後驗證日期：2026-11-04（GPU 程序紀錄）。
+
 ## Uninstall
 
 The installer leaves a copy of the uninstaller behind, so no checkout or
