@@ -557,15 +557,12 @@ class RestartBaselineTests(unittest.TestCase):
             return [line for line in (state / 'events.log').read_text().splitlines() if 'Docker anomaly' in line]
 
     def test_ac1_partial_round_keeps_the_restart_baseline(self):
-        # The unchanged count after the partial round must not alert, so a
-        # baseline overwritten by NA is caught as well as a dropped one.
-        alerts = self.run_rounds([
-            ('ok', [dict(container='worker', container_id='w1', restart_count=1)]),
-            ('partial', [dict(container='worker', container_id='w1', restart_count='NA',
-                              sample_status='unavailable_or_timeout')]),
-            ('ok', [dict(container='worker', container_id='w1', restart_count=1)]),
-            ('ok', [dict(container='worker', container_id='w1', restart_count=2)]),
-        ])
+        # 1, NA, 1, NA, 2: a baseline overwritten by NA alerts on the third
+        # round, and a baseline dropped by the partial rounds misses the last.
+        count = lambda value: ('ok', [dict(container='worker', container_id='w1', restart_count=value)])
+        partial = ('partial', [dict(container='worker', container_id='w1', restart_count='NA',
+                                    sample_status='unavailable_or_timeout')])
+        alerts = self.run_rounds([count(1), partial, count(1), partial, count(2)])
         self.assertEqual(len(alerts), 1, alerts)
         self.assertIn('worker:oom=false,restarts=2(new)', alerts[0])
 

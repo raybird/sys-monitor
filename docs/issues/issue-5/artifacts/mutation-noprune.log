@@ -7,20 +7,20 @@ test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events (te
 FAIL: test_ac2_baseline_older_than_a_day_is_dropped (test_container_probe.RestartBaselineTests.test_ac2_baseline_older_than_a_day_is_dropped)
 ----------------------------------------------------------------------
 Traceback (most recent call last):
-  File "/tmp/claude-1000/-home-kevin-Documents-RCodes-sys-monitor/b36fa669-5f24-42eb-b737-f2408f4b7919/scratchpad/mut-noprune/tests/test_container_probe.py", line 585, in test_ac2_baseline_older_than_a_day_is_dropped
+  File "/tmp/claude-1000/-home-kevin-Documents-RCodes-sys-monitor/b36fa669-5f24-42eb-b737-f2408f4b7919/scratchpad/m3-noprune/tests/test_container_probe.py", line 584, in test_ac2_baseline_older_than_a_day_is_dropped
     self.assertEqual(self.run_rounds([worker(1), gone, gone, worker(2)], day_jump_after=2), [])
     ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-AssertionError: Lists differ: ['2026-11-06T15:14:19+08:00\tWARN\tDocker [69 chars]hy;'] != []
+AssertionError: Lists differ: ['2026-11-06T15:41:32+08:00\tWARN\tDocker [69 chars]hy;'] != []
 
 First list contains 1 additional elements.
 First extra element 0:
-'2026-11-06T15:14:19+08:00\tWARN\tDocker anomaly: worker:oom=false,restarts=2(new),Z>0=no,D>=8=no,health=healthy;'
+'2026-11-06T15:41:32+08:00\tWARN\tDocker anomaly: worker:oom=false,restarts=2(new),Z>0=no,D>=8=no,health=healthy;'
 
 + []
-- ['2026-11-06T15:14:19+08:00\tWARN\tDocker anomaly: '
+- ['2026-11-06T15:41:32+08:00\tWARN\tDocker anomaly: '
 -  'worker:oom=false,restarts=2(new),Z>0=no,D>=8=no,health=healthy;']
 
 ----------------------------------------------------------------------
-Ran 4 tests in 67.421s
+Ran 4 tests in 70.133s
 
 FAILED (failures=1)

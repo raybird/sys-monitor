@@ -63,8 +63,18 @@ issue #2 第三輪審查（[review-a7c2c36.md](../issue-2/review-a7c2c36.md)，2
    - 完成證據（2026-11-06）：
      - 新增 `RestartBaselineTests`，以 `run_rounds` 驅動真實 `src/freeze-monitor`，每輪 Docker 採樣的替身 helper 回應可以指定為 ok、partial 或卡住。
      - `test_ac1_partial_round_keeps_the_restart_baseline` 與 `test_ac1_helper_timeout_round_keeps_the_restart_baseline` 在現有程式碼上通過（[artifacts/check.log](artifacts/check.log)）。
-     - 紅燈基線：在 scratchpad 複本把合併 awk 換回 f1b9bfa 的整份取代寫法，在 tests/ 下執行 `python3 -m unittest -v test_container_probe.RestartBaselineTests test_container_probe.IntegratedReviewFollowupTests.test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events`。結果 exit 1：partial 案例 FAIL，AC-2 也 FAIL；既有的 m1_n1 測試仍然 ok，與 reviewer 的發現相同（[artifacts/mutation-replace.log](artifacts/mutation-replace.log)）。
-     - 審查後修正（[review-c315961.md](review-c315961.md) S1）：partial 案例改成 4 輪（重啟次數 1、NA、1、2），斷言只有 1 筆事件。這樣「把 NA 存成基準」的回歸也會被抓到。紅燈：在 scratchpad 複本拿掉合併 awk 的 `$11 ~ /^[0-9]+$/`，在 tests/ 下執行 `python3 -m unittest -v test_container_probe.RestartBaselineTests.test_ac1_partial_round_keeps_the_restart_baseline`，exit 1，多寫了一筆 `restarts=1(new)`（[artifacts/mutation-na-baseline.log](artifacts/mutation-na-baseline.log)）；在現有程式碼上 ok。
+     - partial 案例的歷程：
+       - 第一版 3 輪（重啟次數 1、NA、2）：只抓得到「基準被清掉」。
+       - 依 [review-c315961.md](review-c315961.md) S1 改成 4 輪（1、NA、1、2）：抓得到「把 NA 存成基準」，但第 3 輪會重新建立基準，所以又抓不到「基準被清掉」（[review-efd8c16.md](review-efd8c16.md) M1）。我那次只重跑了 NA 的突變，沒有重跑整份取代的突變，所以漏掉了。
+       - 現在是 5 輪（1、NA、1、NA、2），斷言只有 1 筆含 `restarts=2(new)` 的事件，兩種回歸都抓得到。
+     - 突變複跑（2026-11-06，以目前的測試為準）：在 scratchpad 的三份複本各做一種突變，在各自的 tests/ 下執行 `python3 -m unittest -v test_container_probe.RestartBaselineTests test_container_probe.IntegratedReviewFollowupTests.test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events`：
+
+       | 突變 | partial | 逾時 | AC-2 | m1_n1 | log |
+       |---|---|---|---|---|---|
+       | 未修改（對照） | ok | ok | ok | ok | [mutation-control.log](artifacts/mutation-control.log) |
+       | 合併 awk 換回 f1b9bfa 的整份取代 | FAIL | ok | FAIL | ok | [mutation-replace.log](artifacts/mutation-replace.log) |
+       | 拿掉 `if (now - ce[2] <= 86400)` | ok | ok | FAIL | ok | [mutation-noprune.log](artifacts/mutation-noprune.log) |
+       | 合併 awk 拿掉 `$11 ~ /^[0-9]+$/`（把 NA 存成基準） | FAIL | ok | ok | ok | [mutation-na-baseline.log](artifacts/mutation-na-baseline.log) |
      - 限制：逾時案例在這個突變下仍然通過。逾時那一輪走 `unavailable:*` 的提早 return，不經過合併邏輯，所以它保護的是「逾時後基準仍在」這個行為，不是合併 awk 本身。
 2. ✅ **AC-2：一天未更新就刪除基準的測試**（相依：無）
    - 產出：同一檔案新增測試，用替身 `date` 跳過一天，並有消失兩輪、不跳時間的對照組。
@@ -83,6 +93,7 @@ issue #2 第三輪審查（[review-a7c2c36.md](../issue-2/review-a7c2c36.md)，2
      - 把文件中的手動執行指令照抄在本機跑一次，只把 `mktemp -d` 的位置改到 scratchpad：exit 0，第一行 `ok`，後面 7 列容器（[artifacts/manual-helper-run.txt](artifacts/manual-helper-run.txt)；repo 公開，只保存摘要，不保存容器名稱與 ID）。
      - 新增的 `ls -l /var/run/docker.sock` 在本機輸出 `srw-rw---- root docker`。
      - 審查後修正（[review-c315961.md](review-c315961.md) N2）：手動執行指令改成用 `sed` 讀出 `FREEZE_WATCH_PYTHON`，不再用 `.` 執行設定檔，跟程式讀這個檔的方式一致；讀不到時退回 `/usr/bin/python3`，跟收集器的預設一致。照抄實跑：讀到 `/usr/bin/python3`，exit 0，第一行 `ok`，7 列容器。
+     - 依 [review-efd8c16.md](review-efd8c16.md) N1 包回子 shell，不在使用者的 shell 留下 `py` 變數。照抄實跑：exit 0，第一行 `ok`，7 列容器，執行後 `py` 為空。
 4. ✅ **AC-4、AC-5：issue 2 文件與型別註記**（相依：無）
    - 產出：`docs/issues/issue-2/README.md`、`docs/issues/issue-2/evidence.md`、`src/freeze_watch.py`。
    - 完成判準：連結都指向存在的檔案；`env -u DISPLAY -u WAYLAND_DISPLAY bash scripts/check.sh` 全過、沒有跳過。
@@ -107,6 +118,7 @@ issue #2 第三輪審查（[review-a7c2c36.md](../issue-2/review-a7c2c36.md)，2
 | 2026-11-06 | 建立；範圍取自 GitHub #5 | - |
 | 2026-11-06 | 本地獨立審查 c315961，判定 PASS（[review-c315961.md](review-c315961.md)） | - |
 | 2026-11-06 | 使用者回覆「照建議修完之後合併」：修 S1、N2、N3、N4，不處理 N1、N6；AC-2 對照組的措辭由「只消失一輪」更正為「消失不到一天」，與測試相符，語意不變 | 使用者／開發助理 |
+| 2026-11-06 | 本地獨立審查 efd8c16，判定 RETURN TO execute-task（[review-efd8c16.md](review-efd8c16.md)）：4 輪的 partial 案例抓不到整份取代的回歸。改成 5 輪並重跑全部突變；N1 一併修正 | - |
 
 ---
 **建立日期**: 2026-11-06  

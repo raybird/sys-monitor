@@ -1,0 +1,9 @@
+test_ac1_helper_timeout_round_keeps_the_restart_baseline (test_container_probe.RestartBaselineTests.test_ac1_helper_timeout_round_keeps_the_restart_baseline) ... ok
+test_ac1_partial_round_keeps_the_restart_baseline (test_container_probe.RestartBaselineTests.test_ac1_partial_round_keeps_the_restart_baseline) ... ok
+test_ac2_baseline_older_than_a_day_is_dropped (test_container_probe.RestartBaselineTests.test_ac2_baseline_older_than_a_day_is_dropped) ... ok
+test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events (test_container_probe.IntegratedReviewFollowupTests.test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 70.115s
+
+OK

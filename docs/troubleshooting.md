@@ -127,10 +127,12 @@ falling back to `/usr/bin/python3` as the collector does; data under
 `XDG_DATA_HOME`):
 
 ```bash
-py="$(sed -n 's/^FREEZE_WATCH_PYTHON=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/freeze-watch/env" 2>/dev/null | tail -1)"
-"${py:-/usr/bin/python3}" \
-  "${XDG_DATA_HOME:-$HOME/.local/share}/freeze-watch/container_probe.py" \
-  now 0 "" "$(mktemp -d)"
+(
+  py="$(sed -n 's/^FREEZE_WATCH_PYTHON=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/freeze-watch/env" 2>/dev/null | tail -1)"
+  "${py:-/usr/bin/python3}" \
+    "${XDG_DATA_HOME:-$HOME/.local/share}/freeze-watch/container_probe.py" \
+    now 0 "" "$(mktemp -d)"
+)
 ```
 
 `docker ps` succeeding is not enough on its own: with a remote context it works
