@@ -146,7 +146,7 @@ def read_tsv_before(path: Path | None, fields: list[str], end_epoch: int,
         with path.open("rb") as handle:
             size = handle.seek(0, os.SEEK_END)
 
-            def epoch_after(offset: int) -> tuple[int, int | None]:
+            def epoch_after(offset: int) -> tuple[int, int | float | None]:
                 """The first whole line starting after offset and its epoch."""
                 handle.seek(offset)
                 if offset:

@@ -118,14 +118,28 @@ the reason (checked 2026-11-06):
 | `unavailable:no_daemon` | The socket exists but nothing answers | Start the Docker daemon |
 | `unavailable:nonlocal` | The context or `DOCKER_HOST` is TCP or SSH | Not supported on purpose: host PIDs and RAM would describe another machine. Select a local context |
 | `unavailable:timeout` | Docker did not answer within the 6 s helper budget, or the 8 s outer limit stopped the helper | Usually a busy daemon; check `docker ps` response time |
-| `unavailable:helper_failed` | The sampling helper exited with an error | Run `python3 ~/.local/share/freeze-watch/container_probe.py now 0 "" "$(mktemp -d)"` to see the error |
-| `unavailable:error` | Another query error | As above |
+| `unavailable:helper_failed` | The sampling helper exited with an error | Run the helper by hand (below) to see the traceback |
+| `unavailable:error` | Another query error, such as an unexpected API reply | The helper reports no detail for these, so running it by hand only prints `unavailable:error` again. Check the endpoint and socket with the commands below and `docker version` |
+
+To run the helper by hand with the interpreter and install location the
+collector uses (`FREEZE_WATCH_PYTHON` from the installer's env file, data
+under `XDG_DATA_HOME`):
+
+```bash
+(
+  . "${XDG_CONFIG_HOME:-$HOME/.config}/freeze-watch/env"
+  "${FREEZE_WATCH_PYTHON:-python3}" \
+    "${XDG_DATA_HOME:-$HOME/.local/share}/freeze-watch/container_probe.py" \
+    now 0 "" "$(mktemp -d)"
+)
+```
 
 `docker ps` succeeding is not enough on its own: with a remote context it works
 while Freeze Watch reports `unavailable:nonlocal`. A local check is:
 
 ```bash
 docker context inspect --format '{{.Endpoints.docker.Host}}'
+ls -l /var/run/docker.sock   # or the unix:// path printed above
 docker ps
 ```
 

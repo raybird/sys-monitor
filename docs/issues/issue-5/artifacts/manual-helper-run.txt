@@ -1,0 +1,5 @@
+# 2026-11-06 依 docs/troubleshooting.md 手動執行 helper 的結果摘要
+# 原始輸出含本機真實容器名稱與 ID，repo 公開，只保留摘要
+exit=0
+first_line=ok
+container_rows=7

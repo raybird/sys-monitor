@@ -57,18 +57,39 @@ issue #2 第三輪審查（[review-a7c2c36.md](../issue-2/review-a7c2c36.md)，2
 
 ## 實作與驗證步驟
 
-1. ⏳ **AC-1：跨失敗輪次的重啟基準測試**（相依：無）
+1. ✅ **AC-1：跨失敗輪次的重啟基準測試**（相依：無）
    - 產出：`tests/test_container_probe.py` 新增 partial 與 helper 逾時兩個案例。
    - 完成判準：測試在現有程式碼上通過；突變成整份取代時，partial 案例失敗。突變只做在 scratchpad 的複本，不提交。
-2. ⏳ **AC-2：一天未更新就刪除基準的測試**（相依：無）
+   - 完成證據（2026-11-06）：
+     - 新增 `RestartBaselineTests`，以 `run_rounds` 驅動真實 `src/freeze-monitor`，每輪 Docker 採樣的替身 helper 回應可以指定為 ok、partial、失敗或卡住。
+     - `test_ac1_partial_round_keeps_the_restart_baseline` 與 `test_ac1_helper_timeout_round_keeps_the_restart_baseline` 在現有程式碼上通過（[artifacts/check.log](artifacts/check.log)）。
+     - 紅燈基線：在 scratchpad 複本把合併 awk 換回 f1b9bfa 的整份取代寫法，在 tests/ 下執行 `python3 -m unittest -v test_container_probe.RestartBaselineTests test_container_probe.IntegratedReviewFollowupTests.test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events`。結果 exit 1：partial 案例 FAIL，AC-2 也 FAIL；既有的 m1_n1 測試仍然 ok，與 reviewer 的發現相同（[artifacts/mutation-replace.log](artifacts/mutation-replace.log)）。
+     - 限制：逾時案例在這個突變下仍然通過。逾時那一輪走 `unavailable:*` 的提早 return，不經過合併邏輯，所以它保護的是「逾時後基準仍在」這個行為，不是合併 awk 本身。
+2. ✅ **AC-2：一天未更新就刪除基準的測試**（相依：無）
    - 產出：同一檔案新增測試，用替身 `date` 跳過一天，並有只消失一輪的對照組。
    - 完成判準：測試通過；拿掉刪除條件的突變版本失敗。
-3. ⏳ **AC-3：疑難排解處置欄**（相依：無）
+   - 完成證據（2026-11-06）：
+     - 收集器開頭寫死了 `PATH`，所以 PATH 上的替身 `date` 不會被用到；第一次寫的測試因此失敗，得到 1 筆事件。改用 bash 匯出函式 `BASH_FUNC_date%%` 替換 `date`，只在 `date +%s` 時加上 offset，不修改 `src/freeze-monitor`。
+     - `test_ac2_baseline_older_than_a_day_is_dropped` 通過：對照組（沒有跳過時間）寫 1 筆 `(new)`，跳過一天則 0 筆。
+     - 紅燈基線：在 scratchpad 複本拿掉 `if (now - ce[2] <= 86400)`，同一命令 exit 1，只有 AC-2 FAIL（[artifacts/mutation-noprune.log](artifacts/mutation-noprune.log)）。這也證明替身 `date` 確實生效。
+3. ✅ **AC-3：疑難排解處置欄**（相依：無）
    - 產出：`docs/troubleshooting.md`。
    - 完成判準：AC-3 的人工核對與指令實跑結果記入下方證據。
-4. ⏳ **AC-4、AC-5：issue 2 文件與型別註記**（相依：無）
+   - 完成證據（2026-11-06）：
+     - 原因碼與 `src/container_probe.py` 的 `unavailable_reason` 一致；`error` 是其他例外的去處，helper 不輸出細節。
+     - 安裝路徑與 `install.sh` 的 `data_home="${XDG_DATA_HOME:-...}"`、`env_file` 一致。
+     - 把文件中的手動執行指令照抄在本機跑一次，只把 `mktemp -d` 的位置改到 scratchpad：exit 0，第一行 `ok`，後面 7 列容器（[artifacts/manual-helper-run.txt](artifacts/manual-helper-run.txt)；repo 公開，只保存摘要，不保存容器名稱與 ID）。
+     - 新增的 `ls -l /var/run/docker.sock` 在本機輸出 `srw-rw---- root docker`。
+4. ✅ **AC-4、AC-5：issue 2 文件與型別註記**（相依：無）
    - 產出：`docs/issues/issue-2/README.md`、`docs/issues/issue-2/evidence.md`、`src/freeze_watch.py`。
    - 完成判準：連結都指向存在的檔案；`env -u DISPLAY -u WAYLAND_DISPLAY bash scripts/check.sh` 全過、沒有跳過。
+   - 完成證據（2026-11-06）：
+     - issue 2 README 補了文件清單、涉及檔案，並在風險段加上「已知邊界」；evidence.md 補上 3.10 紅綠燈的命令。
+     - 用腳本逐一檢查 issue 2 README、evidence.md 與本 README 的相對連結，全部存在。
+     - `epoch_after` 註記改為 `tuple[int, int | float | None]`。
+     - `env -u DISPLAY -u WAYLAND_DISPLAY bash scripts/check.sh`：exit 0，Ran 129 tests，OK，沒有跳過，All checks passed（[artifacts/check.log](artifacts/check.log)）。129 = 126 + 3 個新測試。
+     - 精煉：新測試的替身 helper 與既有 m1_n1 測試有部分重複。既有測試沒有改寫，維持手術式修改；其他 no-op。
+     - 影響分析：GitNexus 沒有登錄本 repo。用 grep 確認 `epoch_after` 只在 `read_tsv_before` 內使用；`src/freeze-monitor` 沒有修改。
 
 ## Timeline
 
@@ -80,4 +101,4 @@ issue #2 第三輪審查（[review-a7c2c36.md](../issue-2/review-a7c2c36.md)，2
 **建立日期**: 2026-11-06  
 **分級**: Small  
 **風險**: Low\
-**狀態**: 待實作
+**狀態**: 待獨立審查

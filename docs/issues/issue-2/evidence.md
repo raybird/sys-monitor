@@ -133,7 +133,10 @@
   - N3：詳情顯示「CPU：未知%」。
 - S1 在 Python 3.10 才會紅。用 `UV_PYTHON_INSTALL_DIR=<scratchpad> uv python install 3.10` 取得 3.10.16，只裝在 scratchpad、不動使用者的 uv 安裝。
   - 紅燈（[artifacts/s1-red-py310.log](artifacts/s1-red-py310.log)）：4 種格式全部解析失敗而退回後備值，包括 `.5+08:00`；`test_s2_rates_divide_by_each_containers_read_time` 也失敗，得到 33.3。
+    - 命令（在 tests/ 下，`<py310>` 是 scratchpad 內 uv 安裝的 python3.10）：`<py310> -m unittest test_container_probe.IntegratedReviewFollowupTests.test_s1_read_time_parses_rfc3339nano_without_python_311 test_container_probe.ReviewFollowupTests.test_s2_rates_divide_by_each_containers_read_time`。
   - 綠燈（[artifacts/s1-green-py310.log](artifacts/s1-green-py310.log)）：3.10 下 18 個 helper 測試 OK。
+    - 命令（同上，在 tests/ 下）：`<py310> -m unittest test_container_probe.IntegratedReviewFollowupTests.test_s1_read_time_parses_rfc3339nano_without_python_311 test_container_probe.ReviewFollowupTests test_container_probe.CounterTests test_container_probe.RecoveryRegressionTests`。
+    - 只涵蓋部分測試類別。第三輪 reviewer 在 3.10.16 下跑 `-m unittest test_container_probe` 全檔，32 個 OK（[review-a7c2c36.md](review-a7c2c36.md)）。2026-11-06 issue 5 補記此命令。
 - 一開始就是綠的：
   - N5 的 shell 原因碼斷言（`unavailable:timeout`、`unavailable:helper_failed`）：這個行為在 9dcf8e3 已經正確，前一輪 reviewer 手動驗過，這次只補上自動化保護。
   - N7 的對照：舊讀法（檔案尾端加 epoch 篩選）在 8 MB 檔案找不到早期事故，這個斷言證明 S6 修正前確實會失敗。

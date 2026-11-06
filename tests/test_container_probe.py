@@ -505,6 +505,85 @@ print(json.dumps(dict(elapsed=time.monotonic() - started, state=state,
         self.assertEqual(helper_row, shell_row)
 
 
+class RestartBaselineTests(unittest.TestCase):
+    """issue 5（2026-11-06）：收集器端重啟基準的合併與一天刪除（review-a7c2c36 S1）。"""
+
+    def run_rounds(self, rounds, day_jump_after=None):
+        """Run the real collector over Docker rounds; return its anomaly events.
+
+        Each round is 'fail', 'hang' or (state, [row overrides]). With
+        day_jump_after=n, `date +%s` jumps 90000 s once the nth helper call ran.
+        """
+        import os
+        import subprocess
+        fields = repr(probe.FIELDS)
+        body = (
+            "import csv, sys, time\nfrom pathlib import Path\n"
+            "state = Path(sys.argv[4])\n"
+            "calls = state / 'calls'\n"
+            "n = int(calls.read_text()) + 1 if calls.exists() else 1\n"
+            "calls.write_text(str(n))\n"
+            f"rounds = {rounds!r}\n"
+            f"if n == {day_jump_after!r}:\n    (state / 'offset').write_text('90000')\n"
+            "spec = rounds[min(n, len(rounds)) - 1]\n"
+            "if spec == 'fail':\n    raise SystemExit(1)\n"
+            "if spec == 'hang':\n    time.sleep(60)\n"
+            "def row(**kw):\n"
+            "    r = dict.fromkeys(" + fields + ", 'NA')\n"
+            "    r.update(timestamp=sys.argv[1], epoch=sys.argv[2], zombies=0, oom_killed='false', health='healthy',\n"
+            "             sample_status='ok', process_status='ok', container_state='running', dstate=0,\n"
+            "             restart_count=0, is_tracked_project=1)\n"
+            "    r.update(kw)\n"
+            "    return [r[k] for k in " + fields + "]\n"
+            "print(spec[0])\n"
+            "w = csv.writer(sys.stdout, delimiter='\\t', lineterminator='\\n')\n"
+            "for kw in spec[1]:\n    w.writerow(row(**kw))\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            helper = Path(td) / 'probe.py'
+            helper.write_text(body)
+            state = Path(td) / 'freeze-monitor'
+            # The collector pins PATH, so an exported bash function stands in for date.
+            fake_date = ('() { if [[ "$1" == "+%s" && -r "' + str(state) + '/offset" ]]; then '
+                         'echo $(( $(command date +%s) + $(< "' + str(state) + '/offset") )); '
+                         'else command date "$@"; fi; }')
+            env = dict(os.environ, XDG_STATE_HOME=td, FREEZE_WATCH_CONTAINER_PROBE=str(helper),
+                       FREEZE_WATCH_PYTHON='/usr/bin/python3', FREEZE_WATCH_MAX_SAMPLES=str(3 * len(rounds)),
+                       FREEZE_WATCH_INTERVAL_SECONDS='1', FREEZE_WATCH_JOURNALCTL='/bin/false',
+                       **{'BASH_FUNC_date%%': fake_date})
+            result = subprocess.run(['bash', str(Path(__file__).resolve().parents[1] / 'src/freeze-monitor')],
+                                    env=env, capture_output=True, text=True, timeout=60)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual((state / 'calls').read_text(), str(len(rounds)))
+            return [line for line in (state / 'events.log').read_text().splitlines() if 'Docker anomaly' in line]
+
+    def test_ac1_partial_round_keeps_the_restart_baseline(self):
+        alerts = self.run_rounds([
+            ('ok', [dict(container='worker', container_id='w1', restart_count=1)]),
+            ('partial', [dict(container='worker', container_id='w1', restart_count='NA',
+                              sample_status='unavailable_or_timeout')]),
+            ('ok', [dict(container='worker', container_id='w1', restart_count=2)]),
+        ])
+        self.assertEqual(len(alerts), 1, alerts)
+        self.assertIn('worker:oom=false,restarts=2(new)', alerts[0])
+
+    def test_ac1_helper_timeout_round_keeps_the_restart_baseline(self):
+        alerts = self.run_rounds([
+            ('ok', [dict(container='worker', container_id='w1', restart_count=1)]),
+            'hang',
+            ('ok', [dict(container='worker', container_id='w1', restart_count=2)]),
+        ])
+        self.assertEqual(len(alerts), 1, alerts)
+        self.assertIn('worker:oom=false,restarts=2(new)', alerts[0])
+
+    def test_ac2_baseline_older_than_a_day_is_dropped(self):
+        worker = lambda count: ('ok', [dict(container='worker', container_id='w1', restart_count=count)])
+        gone = ('ok', [dict(container='other', container_id='o1')])
+        # Control: gone for a round without the clock jump, the baseline survives.
+        self.assertEqual(len(self.run_rounds([worker(1), gone, gone, worker(2)])), 1)
+        # Gone across a day: the baseline is dropped, so the return is a first sample.
+        self.assertEqual(self.run_rounds([worker(1), gone, gone, worker(2)], day_jump_after=2), [])
+
 class IntegratedReviewFollowupTests(unittest.TestCase):
     """2026-11-06 使用者「都依照建議修」：整合後審查的 M1、N1、S1。"""
 

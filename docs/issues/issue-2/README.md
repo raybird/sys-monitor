@@ -21,7 +21,7 @@
 
 - [implementation-plan.md](implementation-plan.md)
 - [驗證證據](evidence.md)
-- 審查報告：[review.md](review.md)、[review-followup.md](review-followup.md)、[review-final.md](review-final.md)（前次 session，未提交的工作區快照）、[review-1e33e63.md](review-1e33e63.md)
+- 審查報告：[review.md](review.md)、[review-followup.md](review-followup.md)、[review-final.md](review-final.md)（前次 session，未提交的工作區快照）、[review-1e33e63.md](review-1e33e63.md)、[review-f1b9bfa.md](review-f1b9bfa.md)、[review-a7c2c36.md](review-a7c2c36.md)
 
 不建立 requirement-analysis.md 與 technical-analysis.md：分級是 Medium。
 
@@ -43,6 +43,8 @@
 - `install.sh`、`uninstall.sh`、`scripts/check.sh`：部署、移除、驗證入口。
 - `tests/test_container_probe.py`、`tests/test_freeze_watch.py`、`tests/test_window_layout.py`。
 - `README.md`、`README.zh-TW.md`、`docs/architecture.md`：使用說明與收集格式。
+- `docs/troubleshooting.md`：Docker 不可用原因的對照與處置。
+- `.github/workflows/ci.yml`：加裝 `python3-gi-cairo`。
 
 既有的 `investigations/` 不納入交付。
 
@@ -156,6 +158,10 @@ Feature: 容器內部負載與當機前歷史對照
   - 卡住的 helper 在 11 秒內被終止，主機樣本照常落盤。
   - 真實閒置狀態 8 個容器的採樣耗時 0.21 秒。
   - 高負載下的成本已豁免，見 Gate 豁免紀錄。
+- **已知邊界（SCN-006 的例外）**：儀表板與收集器的重啟基準有兩處差異，事件以 events.log 為完整紀錄。
+  - 跨日輪替後，新檔第一筆在儀表板沒有比較對象，所以不會標示；收集器跨輪替保留基準，事件照寫。
+  - 儀表板只看該容器 ID 最後 60 筆樣本，收集器則保留一天。
+  - 2026-11-06 由 issue 5 補記，來源是 [review-a7c2c36.md](review-a7c2c36.md) N3。
 
 ## 待確認事項
 
