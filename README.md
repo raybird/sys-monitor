@@ -215,8 +215,12 @@ containers and their OOM/restart state; stopped CPU/I/O values are unknown. Sele
 compare that sample with host temperature and PSI; incident review reads the
 same saved evidence after a reboot. Expanded rows and timestamp choices survive
 live refreshes. Unknown and stale samples are labelled rather than treated as
-healthy. Warning conditions are OOM, unhealthy healthcheck, or nonzero restart,
-D-state, or zombie counts; these are diagnostic clues, not proof of a freeze.
+healthy. Only tracked projects raise warnings: OOM, unhealthy healthcheck,
+zombies, a restart since the previous sample, or at least 4 D-state processes
+(8 for event log entries, matching the host thresholds). An old restart count
+alone is not a warning. Process CPU is the ps lifetime average, so a long-lived
+process that just spiked may not rank in the top 5. These are diagnostic clues,
+not proof of a freeze.
 
 The collector queries a local Docker Unix socket through the selected Docker
 context (or `DOCKER_HOST`). TCP/SSH daemons are reported unavailable: host PID

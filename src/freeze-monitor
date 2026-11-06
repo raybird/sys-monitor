@@ -95,6 +95,7 @@ tracked_process_count="NA"
 tracked_zombie_count="NA"
 last_docker_state=""
 last_docker_alert=""
+last_restart_counts=""
 kernel_log_state="unknown"
 kernel_cursor=""
 last_kernel_alert=""
@@ -290,9 +291,19 @@ record_docker_sample() {
     fi
 
 
-    alert="$(awk -F '\t' '$3 != "" && ($10 == "true" || $15 == "unhealthy" || $9+0 > 0 || $11+0 > 0 || $20+0 > 0) {
-        printf "%s:oom=%s,restarts=%s,Z=%s,D=%s,health=%s;", $3,$10,$11,$9,$20,$15
-    }' <<< "${rows:-}")"
+    # Only tracked projects alert. A restart counts when the same container ID
+    # restarted since the previous sample, so an old count never alerts again;
+    # D shares the host WARN threshold and stays out of the text by value, so
+    # a fluctuating count does not log the same anomaly on every sample.
+    alert="$(awk -F '\t' -v prev="${last_restart_counts}" -v dwarn="${warn_dstate_count}" '
+        BEGIN { n = split(prev, pairs, ";"); for (i = 1; i <= n; i++) if (split(pairs[i], kv, "=") == 2) last[kv[1]] = kv[2] }
+        $3 != "" && $4 == "1" {
+            restarted = ($12 in last) && $11 ~ /^[0-9]+$/ && $11 + 0 > last[$12] + 0
+            deep = $20 ~ /^[0-9]+$/ && $20 + 0 >= dwarn
+            if ($10 == "true" || $15 == "unhealthy" || $9 + 0 > 0 || restarted || deep)
+                printf "%s:oom=%s,restarts=%s%s,Z=%s,D>=%s=%s,health=%s;", $3, $10, $11, restarted ? "(new)" : "", $9, dwarn, deep ? "yes" : "no", $15
+        }' <<< "${rows:-}")"
+    last_restart_counts="$(awk -F '\t' '$12 != "" && $12 != "NA" && $11 ~ /^[0-9]+$/ { printf "%s=%s;", $12, $11 }' <<< "${rows:-}")"
     if [[ -n "${alert}" && "${alert}" != "${last_docker_alert}" ]]; then
         printf '%s\tWARN\tDocker anomaly: %s\n' "${timestamp}" "${alert}" >> "${event_log}"
     fi

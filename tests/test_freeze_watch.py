@@ -440,6 +440,22 @@ class ContainerBackwardCompatibilityTests(unittest.TestCase):
             self.assertIn('未知', freeze_watch.container_detail(row, []))
 
     def test_known_anomalies_only_are_flagged(self):
-        for key, value in [('oom_killed','true'), ('health','unhealthy'), ('dstate','1'), ('zombies','1'), ('restart_count','2')]:
-            self.assertTrue(freeze_watch.container_warning({key:value}))
+        for key, value in [('oom_killed','true'), ('health','unhealthy'), ('dstate','4'), ('zombies','1')]:
+            self.assertTrue(freeze_watch.container_warning({'is_tracked_project': '1', key: value}))
         self.assertFalse(freeze_watch.container_warning({k:'NA' for k in freeze_watch.DOCKER_FIELDS}))
+
+    def test_dstate_uses_host_elevated_threshold(self):
+        # 2026-11-06 使用者決定（S3）：容器 D 沿用主機門檻，4 起才醒目。
+        self.assertFalse(freeze_watch.container_warning({'is_tracked_project': '1', 'dstate': '3'}))
+        self.assertTrue(freeze_watch.container_warning({'is_tracked_project': '1', 'dstate': '4'}))
+
+    def test_untracked_containers_are_never_flagged(self):
+        row = {'is_tracked_project': '0', 'oom_killed': 'true', 'health': 'unhealthy', 'dstate': '9', 'restart_count': '5'}
+        self.assertFalse(freeze_watch.container_warning(row, {'is_tracked_project': '0', 'restart_count': '1'}))
+
+    def test_restart_flags_only_an_increase_over_previous_sample(self):
+        row = {'is_tracked_project': '1', 'restart_count': '2'}
+        self.assertFalse(freeze_watch.container_warning(row))
+        self.assertFalse(freeze_watch.container_warning(row, {'restart_count': '2'}))
+        self.assertFalse(freeze_watch.container_warning(row, {'restart_count': 'NA'}))
+        self.assertTrue(freeze_watch.container_warning(row, {'restart_count': '1'}))

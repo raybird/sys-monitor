@@ -179,7 +179,8 @@ This is a maximum latency bound, not a measured production overhead guarantee.
 Deep sampling asks Docker top for `pid,stat,pcpu,pmem,comm`. It keeps the union
 of the top 5 CPU, top 5 memory, and first 5 D-state processes, at most 15.
 Counts describe the full returned process list; selected entries are not a
-complete process inventory. CPU is ps lifetime average; memory percentage is
+complete process inventory. CPU is ps lifetime average, so a long-lived
+process that spikes may not rank in the top 5; memory percentage is
 relative to host RAM. Container CPU is a delta of total CPU/system counters
 multiplied by online CPU count: 100% means one core. Container memory uses
 raw usage and limit (including cache, unlike the Docker CLI's adjusted view).
@@ -198,8 +199,11 @@ existing daily rotation, 14-day compression and 90-day archive expiry. Old
 files render the absent fields as unknown. Empty or unavailable snapshots have
 an empty container name to prevent resurrecting old containers in the UI.
 The listing includes running containers and stopped containers of selected projects. Inspect precedes stats so OOM/restart/state evidence survives stats failure; stopped containers are not queried for stats/top. The original host container/task totals count only running rows. Partial overview samples explicitly report `partial`. Query failures do not
-stop host metrics. Docker anomaly events retain OOM/restart/Z detection and
-add unhealthy/D-state conditions.
+stop host metrics. Docker anomaly events cover tracked projects only: OOM,
+unhealthy, Z above 0, a restart count above the previous sample of the same
+container ID (no baseline after a collector restart or an unavailable sample),
+or D at the host WARN threshold of 8. The event text records D as a threshold
+flag rather than a count, so a fluctuating D does not repeat the event.
 
 The dashboard reads at most 2 MB of the matching Docker TSV. Each expanded
 container offers at most 60 saved samples from that file, selected by full
@@ -209,6 +213,9 @@ otherwise it marks a gap. History is bounded to the available file tail, does
 not promise an uninterrupted 30-minute history, and does not cross file
 rotation or transparently decompress archives. The last container sample time
 is visible and gaps above 60 seconds relative to host samples are labelled.
-A stopped collector can be recognized from that timestamp. OOM, unhealthy,
-nonzero restart, D or Z counts are warnings; unknown values never trigger a
-normal-state claim. These are correlations rather than automatic diagnoses.
+A stopped collector can be recognized from that timestamp. For tracked
+projects, OOM, unhealthy, Z above 0, a restart since the previous saved sample
+or D of at least 4 (the host elevated threshold) are warnings; unknown values
+never trigger a normal-state claim. These are correlations rather than automatic diagnoses.
+
+最後驗證日期：2026-11-06（容器警示判準、跨重啟回看）。

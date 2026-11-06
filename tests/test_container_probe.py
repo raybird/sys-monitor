@@ -120,6 +120,53 @@ class CollectorIntegrationTests(unittest.TestCase):
             self.assertEqual(rows[0]['sample_status'], 'unavailable')
             self.assertEqual(len(list(csv.DictReader(next(state.glob('metrics-*.tsv')).read_text().splitlines(), delimiter='\t'))), 1)
 
+class ContainerAlertTests(unittest.TestCase):
+    # 2026-11-06 使用者決定（S3）：只警示追蹤中的容器；重啟以相對前一次採樣的增加
+    # 判定；D 沿用主機 WARN 門檻 8，事件去重不受 D 數值波動影響。
+    def test_events_follow_tracked_restart_increase_and_dstate_threshold(self):
+        import os
+        import subprocess
+        fields = repr(probe.FIELDS)
+        body = (
+            "import csv, sys\nfrom pathlib import Path\n"
+            "calls = Path(sys.argv[4]) / 'calls'\n"
+            "n = min(3, int(calls.read_text()) + 1 if calls.exists() else 1)\n"
+            "calls.write_text(str(n))\n"
+            "def row(**kw):\n"
+            "    r = dict.fromkeys(" + fields + ", 'NA')\n"
+            "    r.update(timestamp=sys.argv[1], epoch=sys.argv[2], zombies=0, oom_killed='false', health='healthy',\n"
+            "             sample_status='ok', process_status='ok', container_state='running')\n"
+            "    r.update(kw)\n"
+            "    return [r[k] for k in " + fields + "]\n"
+            "print('ok')\n"
+            "w = csv.writer(sys.stdout, delimiter='\\t', lineterminator='\\n')\n"
+            "w.writerow(row(container='worker', container_id='w1', is_tracked_project=1, restart_count=1 if n < 3 else 2, dstate=0))\n"
+            "w.writerow(row(container='db', container_id='d1', is_tracked_project=1, restart_count=0, dstate=7 + n))\n"
+            "w.writerow(row(container='shallow', container_id='s1', is_tracked_project=1, restart_count=0, dstate=7))\n"
+            "w.writerow(row(container='portainer', container_id='p1', is_tracked_project=0, restart_count=9, dstate=9, oom_killed='true'))\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            helper = Path(td) / 'probe.py'
+            helper.write_text(body)
+            env = dict(os.environ, XDG_STATE_HOME=td, FREEZE_WATCH_CONTAINER_PROBE=str(helper),
+                       FREEZE_WATCH_PYTHON='/usr/bin/python3', FREEZE_WATCH_MAX_SAMPLES='7',
+                       FREEZE_WATCH_INTERVAL_SECONDS='1', FREEZE_WATCH_JOURNALCTL='/bin/false')
+            result = subprocess.run(['bash', str(Path(__file__).resolve().parents[1] / 'src/freeze-monitor')],
+                                    env=env, capture_output=True, text=True, timeout=30)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            state = Path(td) / 'freeze-monitor'
+            self.assertEqual((state / 'calls').read_text(), '3')
+            alerts = [line for line in (state / 'events.log').read_text().splitlines() if 'Docker anomaly' in line]
+        self.assertEqual(len(alerts), 2, alerts)
+        self.assertIn('db:', alerts[0])
+        self.assertNotIn('worker', alerts[0])
+        self.assertIn('worker:', alerts[1])
+        self.assertIn('restarts', alerts[1])
+        for line in alerts:
+            self.assertNotIn('portainer', line)
+            self.assertNotIn('shallow', line)
+
+
 class FailureAndLimitTests(unittest.TestCase):
     def test_empty_snapshot_and_missing_stats_have_distinct_states(self):
         class Empty:

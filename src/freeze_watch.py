@@ -837,9 +837,20 @@ def container_detail(row: dict[str, str], metrics: list[dict[str, str]]) -> str:
     return '\n'.join(lines)
 
 
-def container_warning(row: dict[str, str]) -> bool:
-    return (row.get('oom_killed') == 'true' or row.get('health') == 'unhealthy'
-            or any((as_int(row.get(key)) or 0) > 0 for key in ('zombies', 'dstate', 'restart_count')))
+def container_warning(row: dict[str, str], previous: dict[str, str] | None = None) -> bool:
+    """Known anomalies of a tracked container; previous is its prior sample.
+
+    A restart counts only as an increase over that sample, so a container that
+    restarted once long ago is not flagged forever. D uses the host's elevated
+    threshold.
+    """
+    if row.get('is_tracked_project') != '1':
+        return False
+    restarts = as_int(row.get('restart_count'))
+    before = as_int((previous or {}).get('restart_count'))
+    restarted = restarts is not None and before is not None and restarts > before
+    return (row.get('oom_killed') == 'true' or row.get('health') == 'unhealthy' or restarted
+            or (as_int(row.get('zombies')) or 0) > 0 or (as_int(row.get('dstate')) or 0) >= 4)
 
 
 def container_signature(rows: list[dict[str, str]]) -> tuple:
@@ -1400,7 +1411,7 @@ class FreezeWatch(Gtk.Application):
         cpu_value = as_float(row.get("cpu_pct"))
         cpu = "未知" if cpu_value is None else f"{cpu_value:.1f}"
         memory = row.get("memory_usage", "—").split(" / ")[0]
-        detail_label = self._label(f"{row.get('container_state', '未知')} · {cpu}% · {memory}", "warm" if container_warning(row) else "muted", 1, ellipsize=True)
+        detail_label = self._label(f"{row.get('container_state', '未知')} · {cpu}% · {memory}", "warm" if container_warning(row, history[-2] if len(history) > 1 else None) else "muted", 1, ellipsize=True)
         content.append(name)
         content.append(detail_label)
         expander.set_label_widget(content)
@@ -1430,7 +1441,7 @@ class FreezeWatch(Gtk.Application):
 
         dropdown.connect("notify::selected", select_sample)
         expander.set_child(box)
-        container_row.set_tooltip_text("警示條件：OOM、不健康、重啟、D 或 Z 大於 0。未知不視為正常；展開查看採樣時間與原因。")
+        container_row.set_tooltip_text("警示條件（僅追蹤中的專案）：OOM、不健康、較前一次採樣新增重啟、Z 大於 0，或 D 達 4。未知不視為正常；展開查看採樣時間與原因。")
         container_row.set_child(expander)
         self.container_list.append(container_row)
 
