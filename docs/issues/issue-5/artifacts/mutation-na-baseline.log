@@ -1,0 +1,15 @@
+test_ac1_partial_round_keeps_the_restart_baseline (test_container_probe.RestartBaselineTests.test_ac1_partial_round_keeps_the_restart_baseline) ... FAIL
+
+======================================================================
+FAIL: test_ac1_partial_round_keeps_the_restart_baseline (test_container_probe.RestartBaselineTests.test_ac1_partial_round_keeps_the_restart_baseline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-kevin-Documents-RCodes-sys-monitor/b36fa669-5f24-42eb-b737-f2408f4b7919/scratchpad/mut-f/tests/test_container_probe.py", line 569, in test_ac1_partial_round_keeps_the_restart_baseline
+    self.assertEqual(len(alerts), 1, alerts)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 1 : ['2026-11-06T15:33:14+08:00\tWARN\tDocker anomaly: worker:oom=false,restarts=1(new),Z>0=no,D>=8=no,health=healthy;', '2026-11-06T15:33:17+08:00\tWARN\tDocker anomaly: worker:oom=false,restarts=2(new),Z>0=no,D>=8=no,health=healthy;']
+
+----------------------------------------------------------------------
+Ran 1 test in 13.456s
+
+FAILED (failures=1)

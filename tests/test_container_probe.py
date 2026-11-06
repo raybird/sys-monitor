@@ -511,7 +511,7 @@ class RestartBaselineTests(unittest.TestCase):
     def run_rounds(self, rounds, day_jump_after=None):
         """Run the real collector over Docker rounds; return its anomaly events.
 
-        Each round is 'fail', 'hang' or (state, [row overrides]). With
+        Each round is 'hang' or (state, [row overrides]). With
         day_jump_after=n, `date +%s` jumps 90000 s once the nth helper call ran.
         """
         import os
@@ -526,7 +526,6 @@ class RestartBaselineTests(unittest.TestCase):
             f"rounds = {rounds!r}\n"
             f"if n == {day_jump_after!r}:\n    (state / 'offset').write_text('90000')\n"
             "spec = rounds[min(n, len(rounds)) - 1]\n"
-            "if spec == 'fail':\n    raise SystemExit(1)\n"
             "if spec == 'hang':\n    time.sleep(60)\n"
             "def row(**kw):\n"
             "    r = dict.fromkeys(" + fields + ", 'NA')\n"
@@ -558,10 +557,13 @@ class RestartBaselineTests(unittest.TestCase):
             return [line for line in (state / 'events.log').read_text().splitlines() if 'Docker anomaly' in line]
 
     def test_ac1_partial_round_keeps_the_restart_baseline(self):
+        # The unchanged count after the partial round must not alert, so a
+        # baseline overwritten by NA is caught as well as a dropped one.
         alerts = self.run_rounds([
             ('ok', [dict(container='worker', container_id='w1', restart_count=1)]),
             ('partial', [dict(container='worker', container_id='w1', restart_count='NA',
                               sample_status='unavailable_or_timeout')]),
+            ('ok', [dict(container='worker', container_id='w1', restart_count=1)]),
             ('ok', [dict(container='worker', container_id='w1', restart_count=2)]),
         ])
         self.assertEqual(len(alerts), 1, alerts)
@@ -579,10 +581,11 @@ class RestartBaselineTests(unittest.TestCase):
     def test_ac2_baseline_older_than_a_day_is_dropped(self):
         worker = lambda count: ('ok', [dict(container='worker', container_id='w1', restart_count=count)])
         gone = ('ok', [dict(container='other', container_id='o1')])
-        # Control: gone for a round without the clock jump, the baseline survives.
+        # Control: gone for two rounds without the clock jump, the baseline survives.
         self.assertEqual(len(self.run_rounds([worker(1), gone, gone, worker(2)])), 1)
         # Gone across a day: the baseline is dropped, so the return is a first sample.
         self.assertEqual(self.run_rounds([worker(1), gone, gone, worker(2)], day_jump_after=2), [])
+
 
 class IntegratedReviewFollowupTests(unittest.TestCase):
     """2026-11-06 使用者「都依照建議修」：整合後審查的 M1、N1、S1。"""

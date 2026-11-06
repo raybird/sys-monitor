@@ -122,16 +122,15 @@ the reason (checked 2026-11-06):
 | `unavailable:error` | Another query error, such as an unexpected API reply | The helper reports no detail for these, so running it by hand only prints `unavailable:error` again. Check the endpoint and socket with the commands below and `docker version` |
 
 To run the helper by hand with the interpreter and install location the
-collector uses (`FREEZE_WATCH_PYTHON` from the installer's env file, data
-under `XDG_DATA_HOME`):
+collector uses (`FREEZE_WATCH_PYTHON` read from the installer's env file,
+falling back to `/usr/bin/python3` as the collector does; data under
+`XDG_DATA_HOME`):
 
 ```bash
-(
-  . "${XDG_CONFIG_HOME:-$HOME/.config}/freeze-watch/env"
-  "${FREEZE_WATCH_PYTHON:-python3}" \
-    "${XDG_DATA_HOME:-$HOME/.local/share}/freeze-watch/container_probe.py" \
-    now 0 "" "$(mktemp -d)"
-)
+py="$(sed -n 's/^FREEZE_WATCH_PYTHON=//p' "${XDG_CONFIG_HOME:-$HOME/.config}/freeze-watch/env" 2>/dev/null | tail -1)"
+"${py:-/usr/bin/python3}" \
+  "${XDG_DATA_HOME:-$HOME/.local/share}/freeze-watch/container_probe.py" \
+  now 0 "" "$(mktemp -d)"
 ```
 
 `docker ps` succeeding is not enough on its own: with a remote context it works
