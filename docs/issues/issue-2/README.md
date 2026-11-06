@@ -180,7 +180,7 @@ Feature: 容器內部負載與當機前歷史對照
 
 高負載採樣成本已豁免實測（見 Gate 豁免紀錄），合併後改在真實高負載時段觀察。窗口前的工作已完成：第三輪審查 PASS（[review-a7c2c36.md](review-a7c2c36.md)），main 上 check.sh 126 個測試 OK。
 
-- **起點**：本機安裝 main 版本並重啟 freeze-monitor.service 之後。2026-11-06 確認本機安裝的仍是舊版，還沒有 `container_probe.py`。
+- **起點**：2026-11-06 14:58:27（+08:00）。使用者同意後以 `install.sh --compose-project runwukong,runtelenexus` 安裝 main（6485f56）的 Freeze Watch 0.8.0，freeze-monitor.service 在這個時間重啟；第一輪 Docker 狀態為 ok，追蹤中的容器有 7 個。
 - **觸發事件**：安裝後 runwukong 或 runtelenexus 第一次出現高負載時段，也就是 events.log 出現主機 WARN（壓力、記憶體、D 狀態）或 UNCLEAN、FREEZE 事故。最晚到 2026-11-20 仍沒有觸發，就以安裝後這段期間 CPU 最高的 30 分鐘為窗口照樣判定。
 - **判準**（窗口內追蹤 project 的資料）：
   1. metrics 的 `docker_state`：`unavailable:timeout` 為 0 筆，`partial` 不超過該時段 Docker 採樣的 5%。
@@ -200,6 +200,7 @@ Feature: 容器內部負載與當機前歷史對照
 | 2026-11-06 | 整合後完整範圍審查 f1b9bfa，判定 RETURN TO execute-task（[review-f1b9bfa.md](review-f1b9bfa.md)）；使用者決定依建議修正，SCN-006、007 規格修訂 | - |
 | 2026-11-06 | 第三輪完整範圍審查 a7c2c36，判定 PASS（[review-a7c2c36.md](review-a7c2c36.md)） | - |
 | 2026-11-06 | 使用者要求合併並開後續 issue。fast-forward 合併 30c80d6 到 main，合併後 check.sh 126 個測試 OK；審查剩餘建議 S1、N2～N5 移到 #5，N1 維持現狀並記錄於 #5 | 使用者／開發助理 |
+| 2026-11-06 | 使用者同意更換本機安裝；安裝 main 版本並追蹤 runwukong、runtelenexus，外部驗收窗自 14:58:27 起算 | 使用者／開發助理 |
 
 ---
 **建立日期**: 2026-11-06  
