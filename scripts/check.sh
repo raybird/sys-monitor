@@ -32,7 +32,7 @@ python_bin="$("${repo_dir}/install.sh" --print-python)"
 readonly python_bin
 printf 'Using interpreter: %s\n' "${python_bin}"
 
-"${python_bin}" -m py_compile "${repo_dir}/src/freeze_watch.py"
+"${python_bin}" -m py_compile "${repo_dir}/src/freeze_watch.py" "${repo_dir}/src/container_probe.py"
 "${python_bin}" - <<PY
 from pathlib import Path
 from xml.etree import ElementTree
@@ -43,7 +43,10 @@ PY
 # Widget measurements need a display, and GTK 4 segfaults without one, so a
 # virtual server is used when the suite runs headless. The tests that need it
 # skip themselves when neither is available.
-if [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] || ! command -v xvfb-run >/dev/null 2>&1; then
+if [[ "${FREEZE_WATCH_SKIP_GUI_TESTS:-0}" == 1 ]]; then
+    printf 'GUI tests explicitly skipped (FREEZE_WATCH_SKIP_GUI_TESTS=1)\n'
+    env -u DISPLAY -u WAYLAND_DISPLAY "${python_bin}" -m unittest discover -s "${repo_dir}/tests" -v
+elif [[ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]] || ! command -v xvfb-run >/dev/null 2>&1; then
     "${python_bin}" -m unittest discover -s "${repo_dir}/tests" -v
 else
     # The GL renderer cannot initialise against a virtual framebuffer.
@@ -103,7 +106,9 @@ fi
 
 # The units expand %h to the caller's home, so they can only be verified
 # against a home that has the programs installed.
-if command -v systemd-analyze >/dev/null 2>&1; then
+if [[ "${FREEZE_WATCH_SKIP_SYSTEMD_VERIFY:-0}" == 1 ]]; then
+    printf 'systemd unit validation explicitly skipped (FREEZE_WATCH_SKIP_SYSTEMD_VERIFY=1)\n'
+elif command -v systemd-analyze >/dev/null 2>&1; then
     HOME="${test_home}" \
     XDG_CONFIG_HOME="${test_home}/.config" \
         systemd-analyze --user verify \
@@ -116,6 +121,10 @@ fi
 run_installer --no-start --source "${repo_dir}"
 grep -qxF "FREEZE_WATCH_COMPOSE_PROJECT=example" "${test_env}"
 grep -qxF "${installed_python_line}" "${test_env}"
+
+run_installer --no-start --compose-project runwukong,runtelenexus
+grep -qxF "FREEZE_WATCH_COMPOSE_PROJECT=runwukong,runtelenexus" "${test_env}"
+test -f "${test_home}/.local/share/freeze-watch/container_probe.py"
 
 run_installer --no-start --compose-project other
 grep -qxF "FREEZE_WATCH_COMPOSE_PROJECT=other" "${test_env}"

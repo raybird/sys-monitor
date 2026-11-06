@@ -70,6 +70,7 @@ rm -f -- \
     "${bin_dir}/freeze-watch" \
     "${bin_dir}/freeze-watch-session" \
     "${data_dir}/freeze_watch.py" \
+    "${data_dir}/container_probe.py" \
     "${data_dir}/uninstall.sh" \
     "${applications_dir}/com.raybird.FreezeWatch.desktop" \
     "${autostart_dir}/com.raybird.FreezeWatch-autostart.desktop" \

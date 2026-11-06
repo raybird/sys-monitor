@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import os
 import sys
 from datetime import datetime
@@ -71,7 +72,9 @@ METRICS_FIELDS = [
 DOCKER_FIELDS = [
     "timestamp", "epoch", "container", "is_tracked_project", "cpu_pct",
     "memory_usage", "tasks", "processes", "zombies", "oom_killed",
-    "restart_count",
+    "restart_count", "container_id", "project", "service", "health",
+    "read_bytes", "write_bytes", "read_bps", "write_bps", "dstate",
+    "process_sample", "sample_status", "process_status", "container_state",
 ]
 
 
@@ -95,11 +98,11 @@ def newest_file(pattern: str) -> Path | None:
     return max(files, key=lambda item: item.stat().st_mtime)
 
 
-def read_tsv_path(path: Path | None, fields: list[str]) -> list[dict[str, str]]:
+def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_000) -> list[dict[str, str]]:
     if path is None:
         return []
 
-    lines = tail_text(path).splitlines()
+    lines = tail_text(path, byte_limit).splitlines()
     if not lines:
         return []
 
@@ -608,6 +611,63 @@ class StatusNotifierItem(dbus.service.Object):
         )
 
 
+def latest_containers(rows: list[dict[str, str]]) -> list[dict[str, str]]:
+    stamp = rows[-1].get('timestamp') if rows else None
+    return [row for row in rows if row.get('timestamp') == stamp and row.get('container')]
+
+
+def container_detail(row: dict[str, str], metrics: list[dict[str, str]]) -> str:
+    def value(key: str) -> str:
+        result = row.get(key)
+        return '未知' if result in (None, '', 'NA') else str(result)
+
+    def rate(key: str) -> str:
+        number = as_float(row.get(key))
+        return '未知' if number is None else f'{number / 1024:.1f} KiB/s'
+
+    health = {'not_configured': '未設定 healthcheck', 'healthy': '健康',
+              'unhealthy': '不健康', 'starting': '啟動中'}.get(value('health'), value('health'))
+    lines = [f"採樣：{value('timestamp')} · 狀態 {value('sample_status')}",
+             f"ID：{value('container_id')} · 容器狀態 {value('container_state')}", f"Project／service：{value('project')}／{value('service')}",
+             f"CPU：{value('cpu_pct').rstrip('%')}%（區間使用率，100% 為一個核心）",
+             f"記憶體／上限：{value('memory_usage')}",
+             f"Tasks {value('tasks')} · 程序 {value('processes')} · D {value('dstate')} · Z {value('zombies')}",
+             f"OOM {value('oom_killed')} · 重啟 {value('restart_count')} · Health {health}",
+             f"累計 block I/O：讀 {value('read_bytes')} B · 寫 {value('write_bytes')} B",
+             f"讀取 {rate('read_bps')} · 寫入 {rate('write_bps')}",
+             'Block I/O 不含快取命中的所有檔案讀取；未知可能是首次採樣、計數器重置或核心未提供。']
+    epoch = as_float(row.get('epoch'))
+    host = next((m for m in reversed(metrics) if epoch is not None and as_float(m.get('epoch')) is not None
+                 and 0 <= epoch - as_float(m.get('epoch')) <= 45), None)
+    if host:
+        temperature = as_float(host.get('cpu_temp_mC'))
+        lines.append(f"主機 @{host.get('timestamp', host.get('epoch'))}：CPU {format_temperature(temperature / 1000 if temperature is not None else None)} · "
+                     f"I/O PSI {host.get('io_psi_avg10', '未知')}% · RAM PSI {host.get('memory_psi_avg10', '未知')}%")
+    else:
+        lines.append('主機資料缺口：沒有此前 45 秒內的對照樣本')
+    lines.append('程序 CPU 為 ps 生命週期平均；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。')
+    status = value('process_status')
+    descriptions = {'stopped': '容器已停止，無即時負載／程序', 'not_tracked': '未選取此 Compose project', 'budget_or_limit': '本輪預算／容器數上限，等待輪替',
+                    'unavailable_or_timeout': '權限、容器消失、格式不支援或查詢逾時', 'NA': '舊紀錄未提供'}
+    try:
+        processes = json.loads(row.get('process_sample', 'NA'))
+        if not isinstance(processes, list):
+            raise ValueError('not a list')
+        for process in processes[:15]:
+            lines.append(f"PID {process['pid']} · {process['state']} · CPU {process['cpu']}% · RAM {process['memory']}% · {process['name']}")
+        if not processes:
+            lines.append('此樣本無程序')
+    except (ValueError, TypeError, KeyError):
+        lines.append(f"程序：未知（{descriptions.get(status, status)}）")
+    lines.append('高負載與事故時間重疊僅是線索，不代表因果。')
+    return '\n'.join(lines)
+
+
+def container_warning(row: dict[str, str]) -> bool:
+    return (row.get('oom_killed') == 'true' or row.get('health') == 'unhealthy'
+            or any((as_int(row.get(key)) or 0) > 0 for key in ('zombies', 'dstate', 'restart_count')))
+
+
 def container_signature(rows: list[dict[str, str]]) -> tuple:
     """Everything a container row renders, and nothing else.
 
@@ -621,6 +681,8 @@ def container_signature(rows: list[dict[str, str]]) -> tuple:
             row.get("cpu_pct"),
             row.get("memory_usage"),
             row.get("zombies"),
+            row.get("evidence_detail"),
+            row.get("history_signature"),
         )
         for row in rows
     )
@@ -1132,30 +1194,54 @@ class FreezeWatch(Gtk.Application):
         while child := list_box.get_first_child():
             list_box.remove(child)
 
-    def _append_container_row(self, row: dict[str, str]) -> None:
+    def _append_container_row(self, row: dict[str, str], history=None, metrics=None, expanded=False) -> None:
         if self.container_list is None:
             return
+        history = history or [row]
+        metrics = metrics or []
         container_row = Gtk.ListBoxRow()
         container_row.add_css_class("data-row")
+        expander = Gtk.Expander()
+        expander.set_name(row.get("container_id", row.get("container", "unknown")))
+        expander.set_expanded(expanded)
         content = Gtk.Box(spacing=10)
-        content.add_css_class("list-row")
         name = self._label(row.get("container", "unknown"), None, ellipsize=True)
         name.set_hexpand(True)
-        cpu = row.get("cpu_pct", "—")
+        cpu_value = as_float(row.get("cpu_pct"))
+        cpu = "未知" if cpu_value is None else f"{cpu_value:.1f}"
         memory = row.get("memory_usage", "—").split(" / ")[0]
-        zombies = row.get("zombies", "—")
-        detail = f"{cpu}  ·  {memory}  ·  Z {zombies}"
-        detail_class = "warm" if (as_int(zombies) or 0) > 0 else "muted"
-        detail_label = self._label(detail, detail_class, 1, ellipsize=True)
-        container_row.set_tooltip_text(
-            f"容器：{row.get('container', 'unknown')}\n"
-            f"CPU 使用率：{cpu}\n"
-            f"記憶體使用：{row.get('memory_usage', '—')}\n"
-            f"殭屍程序（Zombies）：{zombies}"
-        )
+        detail_label = self._label(f"{row.get('container_state', '未知')} · {cpu}% · {memory}", "warm" if container_warning(row) else "muted", 1, ellipsize=True)
         content.append(name)
         content.append(detail_label)
-        container_row.set_child(content)
+        expander.set_label_widget(content)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        choices = history[-60:][::-1]
+        dropdown = Gtk.DropDown.new_from_strings([r.get("timestamp", "未知") for r in choices])
+        dropdown.set_tooltip_text("選擇已保存的容器樣本，同時顯示此前 45 秒內主機溫度與 PSI。最多 60 筆。")
+        box.append(dropdown)
+        detail = self._label("", "muted", ellipsize=False)
+        detail.set_wrap(True)
+        detail.set_wrap_mode(Pango.WrapMode.WORD_CHAR)
+        detail.set_max_width_chars(35)
+        detail.set_selectable(True)
+        box.append(detail)
+        key = expander.get_name()
+        selections = getattr(self, "container_selections", {})
+        self.container_selections = selections
+        selected = next((i for i, r in enumerate(choices) if r.get("epoch") == selections.get(key)), 0)
+        dropdown.set_selected(selected)
+        detail.set_text(container_detail(choices[selected], metrics))
+
+        def select_sample(widget, _parameter):
+            index = widget.get_selected()
+            if index < len(choices):
+                selections[key] = choices[index].get("epoch")
+                detail.set_text(container_detail(choices[index], metrics))
+
+        dropdown.connect("notify::selected", select_sample)
+        expander.set_child(box)
+        container_row.set_tooltip_text("警示條件：OOM、不健康、重啟、D 或 Z 大於 0。未知不視為正常；展開查看採樣時間與原因。")
+        container_row.set_child(expander)
         self.container_list.append(container_row)
 
     def _append_process_row(
@@ -1469,7 +1555,7 @@ class FreezeWatch(Gtk.Application):
             # The collector names both files from the same stamp, so the
             # container sample beside an incident is one substitution away.
             docker_rows = read_tsv_path(
-                docker_path_for(self.selected_incident.metrics_path), DOCKER_FIELDS
+                docker_path_for(self.selected_incident.metrics_path), DOCKER_FIELDS, 2_000_000
             )
             end = epoch_of(self.selected_incident.timestamp)
             if end is not None:
@@ -1477,11 +1563,24 @@ class FreezeWatch(Gtk.Application):
                     row for row in docker_rows if (as_int(row.get("epoch")) or 0) <= end
                 ]
         else:
-            docker_rows = read_tsv_tail("docker-*.tsv", DOCKER_FIELDS)
-        last_timestamp = docker_rows[-1].get("timestamp") if docker_rows else None
-        current_containers = [
-            row for row in docker_rows if row.get("timestamp") == last_timestamp
-        ]
+            docker_rows = read_tsv_path(newest_file("docker-*.tsv"), DOCKER_FIELDS, 2_000_000)
+        current_containers = latest_containers(docker_rows)
+        histories = {}
+        for row in current_containers:
+            identity = row.get("container_id")
+            history = [r for r in docker_rows if (
+                r.get("container_id") == identity if identity not in (None, "NA", "")
+                else r.get("container") == row.get("container")
+            ) and r.get("container")][-60:]
+            histories[row.get("container")] = history
+            row["evidence_detail"] = container_detail(row, metric_rows)
+            row["history_signature"] = str([(r.get("epoch"), r.get("process_status")) for r in history])
+        if "hero_docker" in self.labels:
+            last = docker_rows[-1] if docker_rows else {}
+            stamp = last.get("timestamp", "未知")
+            age = (as_float(latest_metric.get("epoch")) or 0) - (as_float(last.get("epoch")) or 0)
+            freshness = " · 資料過期／缺口" if age > 60 else ""
+            self.labels["hero_docker"].set_text(f"DOCKER {container_count} · {docker_state} · 最後採樣 {stamp}{freshness}")
         # Emptying a list shrinks the content, which clamps the scroll position
         # to the smaller extent; refilling it does not put the position back.
         # Refreshing every two seconds therefore walked the view up the page
@@ -1513,9 +1612,17 @@ class FreezeWatch(Gtk.Application):
 
             if rebuild_containers:
                 self.container_signature = containers
+                expanded = set()
+                child = self.container_list.get_first_child()
+                while child:
+                    expander = child.get_child()
+                    if isinstance(expander, Gtk.Expander) and expander.get_expanded():
+                        expanded.add(expander.get_name())
+                    child = child.get_next_sibling()
                 self._clear_list(self.container_list)
                 for row in current_containers:
-                    self._append_container_row(row)
+                    key = row.get("container_id", row.get("container", "unknown"))
+                    self._append_container_row(row, histories.get(row.get("container")), metric_rows, key in expanded)
 
             if rebuild_events:
                 self.event_signature = event_signature

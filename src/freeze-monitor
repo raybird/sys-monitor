@@ -72,6 +72,8 @@ if ! flock -n 9; then
     exit 0
 fi
 
+# A restarted collector has no continuous sampling baseline.
+rm -f -- "${state_dir}/docker-counters.json"
 boot_id="$(< /proc/sys/kernel/random/boot_id)"
 start_stamp="$(date --iso-8601=seconds | tr ':' '-')"
 log_date="$(date +%F)"
@@ -235,22 +237,9 @@ read_dstate_count() {
 record_docker_sample() {
     local timestamp="$1"
     local epoch="$2"
-    local stats_output
-    local project_output
-    local container_name
-    local cpu_pct
-    local mem_usage
-    local tasks
-    local is_tracked
-    local inspect_output
-    local oom_killed
-    local restart_count
-    local top_output
-    local process_count
-    local zombie_count
-    local alert=""
-    local name
-    declare -A tracked_names=()
+    local output rows summary alert
+    local probe="${FREEZE_WATCH_CONTAINER_PROBE:-${XDG_DATA_HOME:-${HOME}/.local/share}/freeze-watch/container_probe.py}"
+    local python_bin="${FREEZE_WATCH_PYTHON:-/usr/bin/python3}"
 
     docker_state="unavailable"
     docker_container_count=0
@@ -260,93 +249,32 @@ record_docker_sample() {
     tracked_process_count=0
     tracked_zombie_count=0
 
-    if ! command -v docker >/dev/null 2>&1; then
-        docker_state="not_installed"
-    elif ! stats_output="$(
-        timeout 5s docker stats --no-stream \
-            --format '{{.Name}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.PIDs}}' \
-            2>/dev/null
-    )"; then
-        docker_state="unavailable"
-    else
-        docker_state="ok"
-        project_output=""
-        if [[ -n "${compose_project}" ]]; then
-            project_output="$(
-                timeout 3s docker ps \
-                    --filter "label=com.docker.compose.project=${compose_project}" \
-                    --format '{{.Names}}' 2>/dev/null
-            )" || project_output=""
+    if output="$(timeout -k 1s 8s "${python_bin}" "${probe}" "${timestamp}" "${epoch}" "${compose_project}" "${state_dir}" 2>/dev/null)"; then
+        docker_state="${output%%$'\n'*}"
+        rows="${output#*$'\n'}"
+        if [[ "${docker_state}" == "unavailable" ]]; then
+            rm -f -- "${state_dir}/docker-counters.json"
         fi
-
-        while IFS= read -r name; do
-            [[ -n "${name}" ]] || continue
-            tracked_names["${name}"]=1
-        done <<< "${project_output}"
-
-        while IFS=$'\t' read -r container_name cpu_pct mem_usage tasks; do
-            [[ -n "${container_name}" ]] || continue
-            tasks="${tasks:-0}"
-            is_tracked=0
-            oom_killed="NA"
-            restart_count="NA"
-            process_count="NA"
-            zombie_count="NA"
-
-            docker_container_count=$((docker_container_count + 1))
-            if [[ "${tasks}" =~ ^[0-9]+$ ]]; then
-                docker_task_count=$((docker_task_count + tasks))
-            fi
-
-            if [[ -n "${tracked_names[${container_name}]+set}" ]]; then
-                is_tracked=1
-                tracked_container_count=$((tracked_container_count + 1))
-                if [[ "${tasks}" =~ ^[0-9]+$ ]]; then
-                    tracked_task_count=$((tracked_task_count + tasks))
-                fi
-
-                inspect_output="$(
-                    timeout 3s docker inspect \
-                        -f '{{.State.OOMKilled}}|{{.RestartCount}}' \
-                        "${container_name}" 2>/dev/null
-                )" || inspect_output="NA|NA"
-                IFS='|' read -r oom_killed restart_count <<< "${inspect_output}"
-
-                top_output="$(
-                    timeout 3s docker top "${container_name}" -eo pid,stat 2>/dev/null
-                )" || top_output=""
-                if [[ -n "${top_output}" ]]; then
-                    read -r process_count zombie_count < <(
-                        awk '
-                            NR > 1 && NF > 0 {
-                                processes++
-                                if ($2 ~ /^Z/) zombies++
-                            }
-                            END { print processes + 0, zombies + 0 }
-                        ' <<< "${top_output}"
-                    )
-                    tracked_process_count=$((tracked_process_count + process_count))
-                    tracked_zombie_count=$((tracked_zombie_count + zombie_count))
-                fi
-
-                if [[ "${zombie_count}" =~ ^[0-9]+$ ]] && (( zombie_count > 0 )); then
-                    alert+="${container_name}:zombies=${zombie_count};"
-                fi
-                if [[ "${oom_killed}" == "true" ]]; then
-                    alert+="${container_name}:oom=true;"
-                fi
-                if [[ "${restart_count}" =~ ^[0-9]+$ ]] && (( restart_count > 0 )); then
-                    alert+="${container_name}:restarts=${restart_count};"
-                fi
-            fi
-
-            mem_usage="${mem_usage//$'\t'/ }"
-            printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' \
-                "${timestamp}" "${epoch}" "${container_name}" \
-                "${is_tracked}" "${cpu_pct}" "${mem_usage}" "${tasks}" \
-                "${process_count}" "${zombie_count}" \
-                "${oom_killed}" "${restart_count}" >> "${docker_log}"
-        done <<< "${stats_output}"
+        printf '%s\n' "${rows}" >> "${docker_log}"
+        summary="$(awk -F '\t' '
+            $3 != "" && $3 != "NA" && $24 == "running" {
+                containers++; tasks += ($7 ~ /^[0-9]+$/ ? $7 : 0)
+                if ($4 == 1) {
+                    tracked++; tracked_tasks += ($7 ~ /^[0-9]+$/ ? $7 : 0)
+                    processes += ($8 ~ /^[0-9]+$/ ? $8 : 0)
+                    zombies += ($9 ~ /^[0-9]+$/ ? $9 : 0)
+                }
+            }
+            END {print containers+0, tasks+0, tracked+0, tracked_tasks+0, processes+0, zombies+0}
+        ' <<< "${rows}")"
+        read -r docker_container_count docker_task_count tracked_container_count \
+            tracked_task_count tracked_process_count tracked_zombie_count <<< "${summary}"
+    else
+        rm -f -- "${state_dir}/docker-counters.json"
+        # An explicit empty sample prevents the UI from presenting old containers
+        # as current after a timeout. The main host loop continues regardless.
+        printf '%s\t%s\t\t0\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tunavailable\tunavailable\tNA\n' \
+            "${timestamp}" "${epoch}" >> "${docker_log}"
     fi
 
     if [[ "${docker_state}" != "${last_docker_state}" ]]; then
@@ -355,11 +283,15 @@ record_docker_sample() {
         last_docker_state="${docker_state}"
     fi
 
+
+    alert="$(awk -F '\t' '$3 != "" && ($10 == "true" || $15 == "unhealthy" || $9+0 > 0 || $11+0 > 0 || $20+0 > 0) {
+        printf "%s:oom=%s,restarts=%s,Z=%s,D=%s,health=%s;", $3,$10,$11,$9,$20,$15
+    }' <<< "${rows:-}")"
     if [[ -n "${alert}" && "${alert}" != "${last_docker_alert}" ]]; then
-        printf '%s\tWARN\tDocker anomaly: %s\n' \
-            "${timestamp}" "${alert}" >> "${event_log}"
+        printf '%s\tWARN\tDocker anomaly: %s\n' "${timestamp}" "${alert}" >> "${event_log}"
     fi
     last_docker_alert="${alert}"
+
 }
 
 record_event_if_needed() {
@@ -573,7 +505,7 @@ write_log_headers() {
     # New columns are appended, never inserted. The dashboard reads these files
     # by position, so a file written by an older version has to keep parsing.
     printf 'timestamp\tepoch\tuptime_s\tload1\tload5\tload15\tmem_available_kib\tswap_used_kib\troot_used_pct\tcpu_temp_mC\tgpu_temp_mC\tnvme_temp_mC\tgpu_busy_pct\tcpu_psi_avg10\tmemory_psi_avg10\tio_psi_avg10\tdocker_state\tdocker_containers\tdocker_tasks\ttracked_containers\ttracked_tasks\ttracked_processes\ttracked_zombies\ttop_processes\tcpu_psi_full_avg10\tmemory_psi_full_avg10\tio_psi_full_avg10\tdstate_count\tcpu_throttle_count\tswapin_pages\tswapout_pages\tmajfault_count\tdisk_in_flight\tdisk_busy_ms\ttop_memory_processes\n' > "${metrics_log}"
-    printf 'timestamp\tepoch\tcontainer\tis_tracked_project\tcpu_pct\tmemory_usage\ttasks\tprocesses\tzombies\toom_killed\trestart_count\n' > "${docker_log}"
+    printf 'timestamp\tepoch\tcontainer\tis_tracked_project\tcpu_pct\tmemory_usage\ttasks\tprocesses\tzombies\toom_killed\trestart_count\tcontainer_id\tproject\tservice\thealth\tread_bytes\twrite_bytes\tread_bps\twrite_bps\tdstate\tprocess_sample\tsample_status\tprocess_status\tcontainer_state\n' > "${docker_log}"
 }
 
 rotate_logs_if_needed() {

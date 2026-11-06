@@ -314,3 +314,40 @@ class SystemMetricLevelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class ContainerEvidenceTests(unittest.TestCase):
+    def test_snapshot_does_not_resurrect_stopped_containers(self):
+        rows = [{'timestamp': 'a', 'container': 'worker'}, {'timestamp': 'b', 'container': '', 'sample_status': 'empty'}]
+        self.assertEqual(freeze_watch.latest_containers(rows), [])
+
+    def test_details_align_host_without_using_future_samples(self):
+        row = {'epoch': '100', 'timestamp': 'then', 'container': 'worker', 'process_sample': '[{"pid":"5","name":"worker","state":"D","cpu":1,"memory":2}]', 'process_status': 'ok'}
+        text = freeze_watch.container_detail(row, [{'epoch': '99', 'cpu_temp_mC': '42000', 'io_psi_avg10': '3'}, {'epoch': '101', 'cpu_temp_mC': '99000'}])
+        self.assertIn('42°C', text)
+        self.assertNotIn('99°C', text)
+        self.assertIn('worker', text)
+        self.assertIn('PID 5', text)
+        self.assertIn('生命週期平均', text)
+
+    def test_stale_host_data_is_explicit(self):
+        text = freeze_watch.container_detail({'epoch': '100'}, [{'epoch': '1', 'cpu_temp_mC': '42000'}])
+        self.assertIn('主機資料缺口', text)
+
+    def test_old_and_malformed_process_samples_show_unknown(self):
+        self.assertIn('未知', freeze_watch.container_detail({'process_sample': 'broken'}, []))
+        self.assertIn('未知', freeze_watch.container_detail({}, []))
+
+class ContainerBackwardCompatibilityTests(unittest.TestCase):
+    def test_old_docker_schema_loads_as_unknown_new_fields(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'docker-old.tsv'
+            path.write_text('timestamp\tepoch\tcontainer\tis_tracked_project\tcpu_pct\tmemory_usage\ttasks\tprocesses\tzombies\toom_killed\trestart_count\nnow\t100\told\t1\t5%\t1MiB / 2GiB\t2\t1\t0\tfalse\t0\n')
+            row = freeze_watch.read_tsv_path(path, freeze_watch.DOCKER_FIELDS)[0]
+            self.assertEqual(row['container_id'], 'NA')
+            self.assertIn('CPU：5%', freeze_watch.container_detail(row, []))
+            self.assertIn('未知', freeze_watch.container_detail(row, []))
+
+    def test_known_anomalies_only_are_flagged(self):
+        for key, value in [('oom_killed','true'), ('health','unhealthy'), ('dstate','1'), ('zombies','1'), ('restart_count','2')]:
+            self.assertTrue(freeze_watch.container_warning({key:value}))
+        self.assertFalse(freeze_watch.container_warning({k:'NA' for k in freeze_watch.DOCKER_FIELDS}))

@@ -116,3 +116,25 @@ curl -fsSL https://raw.githubusercontent.com/raybird/sys-monitor/main/uninstall.
 
 詳細說明請參考 [架構](docs/architecture.md) 與
 [疑難排解](docs/troubleshooting.md)。
+
+## 容器內部狀況
+
+同時深度監控兩個專案，沿用既有設定選項：
+
+```bash
+./install.sh --compose-project runwukong,runtelenexus
+```
+
+展開容器可查看 CPU、記憶體／上限、tasks／程序、OOM、重啟、health、
+累計 block I/O bytes 與每秒速率，以及最多 15 個高 CPU／記憶體／D-state 程序。
+選定專案已退出的容器仍保留 OOM／重啟與狀態，停止後的即時負載顯示未知。
+使用詳情內的時間選單，可查看已存樣本與此前 45 秒內的主機溫度、I/O／RAM PSI；
+事故回顧同樣使用落盤資料。選擇與展開狀態會跨即時更新保留。
+
+未知、逾時、過期與資料缺口會標明；首次採樣、容器重建／重啟、計數器重置
+不會顯示假速率。警示條件為 OOM、不健康、重啟、D 或 Z 大於 0；歷史重啟次數
+不代表剛發生重啟，高負載與事故重疊也不代表因果。
+
+採樣使用目前 Docker context／DOCKER_HOST 的本機 Unix socket，不需進入容器、
+安裝 agent 或額外提權。遠端 TCP／SSH daemon 不支援主機程序歸因，會顯示不可用。
+Block I/O 不包含所有快取命中的檔案讀取；核心未提供計數器時顯示未知。

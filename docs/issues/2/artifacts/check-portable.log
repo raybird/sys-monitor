@@ -1,0 +1,123 @@
+Using interpreter: /usr/bin/python3
+GUI tests explicitly skipped (FREEZE_WATCH_SKIP_GUI_TESTS=1)
+test_failed_helper_cannot_stop_host_metrics_or_keep_old_snapshot (test_container_probe.CollectorIntegrationTests.test_failed_helper_cannot_stop_host_metrics_or_keep_old_snapshot) ... ok
+test_real_shell_writes_compatible_rows_and_anomaly (test_container_probe.CollectorIntegrationTests.test_real_shell_writes_compatible_rows_and_anomaly) ... ok
+test_bounded_processes_preserve_dstate_and_never_argv (test_container_probe.CounterTests.test_bounded_processes_preserve_dstate_and_never_argv) ... ok
+test_no_process_output_is_unknown (test_container_probe.CounterTests.test_no_process_output_is_unknown) ... ok
+test_rates_use_elapsed_time_and_identity (test_container_probe.CounterTests.test_rates_use_elapsed_time_and_identity) ... ok
+test_raw_block_bytes_and_missing_accounting (test_container_probe.CounterTests.test_raw_block_bytes_and_missing_accounting) ... ok
+test_empty_snapshot_and_missing_stats_have_distinct_states (test_container_probe.FailureAndLimitTests.test_empty_snapshot_and_missing_stats_have_distinct_states) ... ok
+test_engine_rejects_nonlocal_endpoint (test_container_probe.FailureAndLimitTests.test_engine_rejects_nonlocal_endpoint) ... ok
+test_exact_fields_match_dashboard_and_shell_header (test_container_probe.FailureAndLimitTests.test_exact_fields_match_dashboard_and_shell_header) ... ok
+test_helper_main_roundtrips_json_without_double_escaping (test_container_probe.FailureAndLimitTests.test_helper_main_roundtrips_json_without_double_escaping) ... ok
+test_more_than_32_containers_do_not_starve_deep_projects (test_container_probe.FailureAndLimitTests.test_more_than_32_containers_do_not_starve_deep_projects) ... ok
+test_failed_helper_cannot_stop_host_metrics_or_keep_old_snapshot (test_container_probe.HardTimeoutTest.test_failed_helper_cannot_stop_host_metrics_or_keep_old_snapshot) ... ok
+test_hung_helper_has_hard_limit_and_host_survives (test_container_probe.HardTimeoutTest.test_hung_helper_has_hard_limit_and_host_survives) ... ok
+test_real_shell_writes_compatible_rows_and_anomaly (test_container_probe.HardTimeoutTest.test_real_shell_writes_compatible_rows_and_anomaly) ... ok
+test_running_priority_cannot_starve_exited_oom_containers (test_container_probe.MixedRotationRegressionTests.test_running_priority_cannot_starve_exited_oom_containers) ... ok
+test_corrupt_cache_entry_recovers_as_first_sample (test_container_probe.RecoveryRegressionTests.test_corrupt_cache_entry_recovers_as_first_sample) ... ok
+test_cpu_requires_identity_positive_cores_and_forward_time (test_container_probe.RecoveryRegressionTests.test_cpu_requires_identity_positive_cores_and_forward_time) ... ok
+test_daemon_outage_invalidates_cpu_and_io_baseline (test_container_probe.RecoveryRegressionTests.test_daemon_outage_invalidates_cpu_and_io_baseline) ... ok
+test_exited_oom_is_inspected_without_stats_or_top (test_container_probe.RecoveryRegressionTests.test_exited_oom_is_inspected_without_stats_or_top) ... ok
+test_inspect_evidence_survives_stats_failure (test_container_probe.RecoveryRegressionTests.test_inspect_evidence_survives_stats_failure) ... ok
+test_valid_cpu_delta_matches_one_core_semantics (test_container_probe.RecoveryRegressionTests.test_valid_cpu_delta_matches_one_core_semantics) ... ok
+test_deadline_limits_calls (test_container_probe.SamplingTests.test_deadline_limits_calls) ... ok
+test_multi_project_raw_stats_and_private_cache (test_container_probe.SamplingTests.test_multi_project_raw_stats_and_private_cache) ... ok
+test_unavailable_endpoint_records_explicit_empty_snapshot (test_container_probe.SamplingTests.test_unavailable_endpoint_records_explicit_empty_snapshot) ... ok
+test_known_anomalies_only_are_flagged (test_freeze_watch.ContainerBackwardCompatibilityTests.test_known_anomalies_only_are_flagged) ... ok
+test_old_docker_schema_loads_as_unknown_new_fields (test_freeze_watch.ContainerBackwardCompatibilityTests.test_old_docker_schema_loads_as_unknown_new_fields) ... ok
+test_details_align_host_without_using_future_samples (test_freeze_watch.ContainerEvidenceTests.test_details_align_host_without_using_future_samples) ... ok
+test_old_and_malformed_process_samples_show_unknown (test_freeze_watch.ContainerEvidenceTests.test_old_and_malformed_process_samples_show_unknown) ... ok
+test_snapshot_does_not_resurrect_stopped_containers (test_freeze_watch.ContainerEvidenceTests.test_snapshot_does_not_resurrect_stopped_containers) ... ok
+test_stale_host_data_is_explicit (test_freeze_watch.ContainerEvidenceTests.test_stale_host_data_is_explicit) ... ok
+test_formats_missing_values (test_freeze_watch.FreezeWatchDataTests.test_formats_missing_values) ... ok
+test_reads_a_file_written_before_the_newest_columns (test_freeze_watch.FreezeWatchDataTests.test_reads_a_file_written_before_the_newest_columns)
+Columns are appended, so an older file just stops short of them. ... ok
+test_reads_latest_metrics_row (test_freeze_watch.FreezeWatchDataTests.test_reads_latest_metrics_row) ... ok
+test_temperature_levels (test_freeze_watch.FreezeWatchDataTests.test_temperature_levels) ... ok
+test_ignores_unrecognised_devices (test_freeze_watch.HwmonTests.test_ignores_unrecognised_devices) ... ok
+test_prefers_earlier_candidate_over_lower_device_number (test_freeze_watch.HwmonTests.test_prefers_earlier_candidate_over_lower_device_number) ... ok
+test_reads_intel_package_sensor (test_freeze_watch.HwmonTests.test_reads_intel_package_sensor) ... ok
+test_sensor_lists_match_the_collector (test_freeze_watch.HwmonTests.test_sensor_lists_match_the_collector) ... ok
+test_derives_the_docker_path_from_the_metrics_path (test_freeze_watch.IncidentTests.test_derives_the_docker_path_from_the_metrics_path) ... ok
+test_finds_the_file_covering_a_stall (test_freeze_watch.IncidentTests.test_finds_the_file_covering_a_stall) ... ok
+test_ignores_routine_entries (test_freeze_watch.IncidentTests.test_ignores_routine_entries) ... ok
+test_newest_incident_comes_first (test_freeze_watch.IncidentTests.test_newest_incident_comes_first) ... ok
+test_reads_a_freeze_and_the_file_it_names (test_freeze_watch.IncidentTests.test_reads_a_freeze_and_the_file_it_names) ... ok
+test_returns_only_the_window_before_the_incident (test_freeze_watch.IncidentTests.test_returns_only_the_window_before_the_incident) ... ok
+test_handles_too_few_samples (test_freeze_watch.StallPositionTests.test_handles_too_few_samples) ... ok
+test_leaves_regular_sampling_unmarked (test_freeze_watch.StallPositionTests.test_leaves_regular_sampling_unmarked) ... ok
+test_marks_a_late_sample (test_freeze_watch.StallPositionTests.test_marks_a_late_sample) ... ok
+test_disk_levels (test_freeze_watch.SystemMetricLevelTests.test_disk_levels) ... ok
+test_load_levels (test_freeze_watch.SystemMetricLevelTests.test_load_levels) ... ok
+test_memory_levels (test_freeze_watch.SystemMetricLevelTests.test_memory_levels) ... ok
+test_pressure_levels (test_freeze_watch.SystemMetricLevelTests.test_pressure_levels) ... ok
+test_process_parsing_and_formatting (test_freeze_watch.SystemMetricLevelTests.test_process_parsing_and_formatting) ... ok
+test_ribbon_tooltip_and_incident_summary (test_freeze_watch.SystemMetricLevelTests.test_ribbon_tooltip_and_incident_summary) ... ok
+test_keeps_the_preferred_size_on_a_large_screen (test_window_layout.ClampTests.test_keeps_the_preferred_size_on_a_large_screen) ... ok
+test_never_goes_below_the_minimum (test_window_layout.ClampTests.test_never_goes_below_the_minimum) ... ok
+test_shrinks_to_fit_a_small_screen (test_window_layout.ClampTests.test_shrinks_to_fit_a_small_screen) ... ok
+test_expander_retains_history_selection_and_bounds_width (test_window_layout.ContainerDetailWidgetTests.test_expander_retains_history_selection_and_bounds_width) ... skipped 'no display available'
+test_a_changed_reading_differs (test_window_layout.ContainerSignatureTests.test_a_changed_reading_differs) ... ok
+test_a_field_that_is_not_rendered_is_ignored (test_window_layout.ContainerSignatureTests.test_a_field_that_is_not_rendered_is_ignored) ... ok
+test_identical_rows_compare_equal (test_window_layout.ContainerSignatureTests.test_identical_rows_compare_equal) ... ok
+test_order_matters (test_window_layout.ContainerSignatureTests.test_order_matters) ... ok
+test_a_plain_label_demands_its_whole_text (test_window_layout.LabelWidthTests.test_a_plain_label_demands_its_whole_text) ... skipped 'no display available'
+test_an_ellipsized_label_can_shrink (test_window_layout.LabelWidthTests.test_an_ellipsized_label_can_shrink) ... skipped 'no display available'
+test_container_rows_stay_shrinkable (test_window_layout.RowWidthTests.test_container_rows_stay_shrinkable) ... skipped 'no display available'
+test_event_rows_stay_shrinkable (test_window_layout.RowWidthTests.test_event_rows_stay_shrinkable) ... skipped 'no display available'
+test_process_rows_stay_shrinkable (test_window_layout.RowWidthTests.test_process_rows_stay_shrinkable) ... skipped 'no display available'
+test_puts_the_position_back (test_window_layout.ScrollRestoreTests.test_puts_the_position_back) ... skipped 'no display available'
+test_stops_running_after_one_pass (test_window_layout.ScrollRestoreTests.test_stops_running_after_one_pass) ... skipped 'no display available'
+
+----------------------------------------------------------------------
+Ran 68 tests in 10.056s
+
+OK (skipped=8)
+
+Note: /tmp/tmp.aaFU97bVRE/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
+
+Freeze Watch 0.8.0 installed.
+
+Python:    /usr/bin/python3
+Collector: /tmp/tmp.aaFU97bVRE/home/.local/bin/freeze-monitor
+Dashboard: /tmp/tmp.aaFU97bVRE/home/.local/bin/freeze-watch
+State:     /tmp/tmp.aaFU97bVRE/home/.local/state/freeze-monitor
+Config:    /tmp/tmp.aaFU97bVRE/home/.config/freeze-watch/env
+Uninstall: /tmp/tmp.aaFU97bVRE/home/.local/share/freeze-watch/uninstall.sh
+systemd unit validation explicitly skipped (FREEZE_WATCH_SKIP_SYSTEMD_VERIFY=1)
+
+Note: /tmp/tmp.aaFU97bVRE/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
+
+Freeze Watch 0.8.0 installed.
+
+Python:    /usr/bin/python3
+Collector: /tmp/tmp.aaFU97bVRE/home/.local/bin/freeze-monitor
+Dashboard: /tmp/tmp.aaFU97bVRE/home/.local/bin/freeze-watch
+State:     /tmp/tmp.aaFU97bVRE/home/.local/state/freeze-monitor
+Config:    /tmp/tmp.aaFU97bVRE/home/.config/freeze-watch/env
+Uninstall: /tmp/tmp.aaFU97bVRE/home/.local/share/freeze-watch/uninstall.sh
+
+Note: /tmp/tmp.aaFU97bVRE/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
+
+Freeze Watch 0.8.0 installed.
+
+Python:    /usr/bin/python3
+Collector: /tmp/tmp.aaFU97bVRE/home/.local/bin/freeze-monitor
+Dashboard: /tmp/tmp.aaFU97bVRE/home/.local/bin/freeze-watch
+State:     /tmp/tmp.aaFU97bVRE/home/.local/state/freeze-monitor
+Config:    /tmp/tmp.aaFU97bVRE/home/.config/freeze-watch/env
+Uninstall: /tmp/tmp.aaFU97bVRE/home/.local/share/freeze-watch/uninstall.sh
+
+Note: /tmp/tmp.aaFU97bVRE/home/.local/bin is not on PATH. Add it to run freeze-watch by name.
+
+Freeze Watch 0.8.0 installed.
+
+Python:    /usr/bin/python3
+Collector: /tmp/tmp.aaFU97bVRE/home/.local/bin/freeze-monitor
+Dashboard: /tmp/tmp.aaFU97bVRE/home/.local/bin/freeze-watch
+State:     /tmp/tmp.aaFU97bVRE/home/.local/state/freeze-monitor
+Config:    /tmp/tmp.aaFU97bVRE/home/.config/freeze-watch/env
+Uninstall: /tmp/tmp.aaFU97bVRE/home/.local/share/freeze-watch/uninstall.sh
+Freeze Watch removed, including configuration and collected history.
+All checks passed.

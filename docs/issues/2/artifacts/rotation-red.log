@@ -1,0 +1,22 @@
+F
+======================================================================
+FAIL: test_running_priority_cannot_starve_exited_oom_containers (test_container_probe.MixedRotationRegressionTests.test_running_priority_cannot_starve_exited_oom_containers)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/raybird/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 291, in test_running_priority_cannot_starve_exited_oom_containers
+    self.assertEqual(inspected,set(range(64)))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Items in the second set but not the first:
+56
+57
+58
+59
+60
+61
+62
+63
+
+----------------------------------------------------------------------
+Ran 1 test in 0.012s
+
+FAILED (failures=1)

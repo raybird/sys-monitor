@@ -197,3 +197,20 @@ class ClampTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+@unittest.skipUnless(HAS_DISPLAY, 'no display available')
+class ContainerDetailWidgetTests(unittest.TestCase):
+    def test_expander_retains_history_selection_and_bounds_width(self):
+        Gtk.init()
+        app = freeze_watch.FreezeWatch(start_hidden=True)
+        app.container_list = Gtk.ListBox()
+        history = [{'container':'worker', 'container_id':'abc', 'timestamp':str(n), 'epoch':str(n), 'process_status':'ok', 'process_sample':'[]'} for n in range(2)]
+        app.container_selections = {'abc':'0'}
+        app._append_container_row(history[-1], history, [], expanded=True)
+        expander = app.container_list.get_first_child().get_child()
+        self.assertTrue(expander.get_expanded())
+        dropdown = expander.get_child().get_first_child()
+        self.assertEqual(dropdown.get_selected(), 1)
+        self.assertLess(app.container_list.measure(Gtk.Orientation.HORIZONTAL, -1)[0], 400)
+        dropdown.set_selected(0)
+        self.assertEqual(app.container_selections['abc'], '1')

@@ -67,7 +67,7 @@ Usage: ./install.sh [options]
        curl -fsSL <raw-url>/install.sh | bash -s -- [options]
 
 Options:
-  --compose-project NAME  Deep-monitor one Docker Compose project.
+  --compose-project NAME  Deep-monitor comma-separated Compose projects.
   --python PATH           Use this Python interpreter instead of probing.
   --ref REF               Tag, branch, or commit to download when no local
                           source tree is present. Default: latest release,
@@ -146,8 +146,8 @@ while (($# > 0)); do
 done
 
 if [[ -n "${compose_project}" ]] &&
-   [[ ! "${compose_project}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*$ ]]; then
-    fail "Compose project must match [A-Za-z0-9][A-Za-z0-9_.-]*"
+   [[ ! "${compose_project}" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]*(,[A-Za-z0-9][A-Za-z0-9_.-]*)*$ ]]; then
+    fail "Compose projects must be comma-separated valid project names"
 fi
 
 if [[ ! "${repo}" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]]; then
@@ -348,6 +348,7 @@ install -m 0755 "${source_dir}/src/freeze-watch" "${bin_dir}/freeze-watch"
 install -m 0755 "${source_dir}/src/freeze-watch-session" "${bin_dir}/freeze-watch-session"
 install -m 0755 "${source_dir}/uninstall.sh" "${data_dir}/uninstall.sh"
 install -m 0644 "${source_dir}/src/freeze_watch.py" "${data_dir}/freeze_watch.py"
+install -m 0644 "${source_dir}/src/container_probe.py" "${data_dir}/container_probe.py"
 install -m 0644 \
     "${source_dir}/packaging/com.raybird.FreezeWatch.desktop" \
     "${applications_dir}/com.raybird.FreezeWatch.desktop"

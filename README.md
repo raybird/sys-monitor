@@ -182,3 +182,29 @@ effectively root-equivalent.
 ## License
 
 MIT
+
+## Container evidence
+
+To inspect both projects without changing their containers:
+
+```bash
+./install.sh --compose-project runwukong,runtelenexus
+```
+
+The existing single-project option still works. Expand a container in the
+dashboard to see raw block I/O byte counters and rates, OOM/restarts/health,
+and up to 15 CPU, memory, or D-state processes. Selected projects retain exited
+containers and their OOM/restart state; stopped CPU/I/O values are unknown. Select a saved timestamp to
+compare that sample with host temperature and PSI; incident review reads the
+same saved evidence after a reboot. Expanded rows and timestamp choices survive
+live refreshes. Unknown and stale samples are labelled rather than treated as
+healthy. Warning conditions are OOM, unhealthy healthcheck, or nonzero restart,
+D-state, or zombie counts; these are diagnostic clues, not proof of a freeze.
+
+The collector queries a local Docker Unix socket through the selected Docker
+context (or `DOCKER_HOST`). TCP/SSH daemons are reported unavailable: host PID
+and RAM attribution would otherwise refer to a different machine. No new
+permissions, container agent, `docker exec`, or container changes are required.
+Existing access to the daemon is still necessary. Cached file reads may not
+appear as block I/O, and kernels without accounting produce unknown counters.
+See [architecture](docs/architecture.md#container-samples) for limits and units.

@@ -117,3 +117,62 @@ can continue reading earlier files.
 New columns are appended, never inserted, for the same reason. A file written
 by an older collector simply stops short of the newest columns, and the
 dashboard reads the absent ones as missing data.
+
+## Container samples
+
+`freeze-monitor` invokes the standard-library-only `container_probe.py` every
+third host sample. It uses read-only GET requests to the local Docker Unix
+socket (`containers/json?all=1`, per-container `stats?stream=false&one-shot=true`,
+inspect and top). Docker CLI context inspection only resolves the endpoint;
+no container exec, logs, full argv, environment or writes to Docker are used.
+TCP/SSH endpoints are unavailable by design; they cannot describe local PIDs.
+
+The cooperative total budget is 6 seconds; individual socket operations time
+out after at most 0.5 seconds. The shell kills a helper that exceeds 8 seconds
+(with a 1-second kill grace). At most 32 overview containers and 8 deep
+containers are selected each round. Deep candidates rotate by 30-second time
+buckets and take priority. Remaining overview slots walk the entire sorted
+container list from a persistent cursor, skipping only candidates already
+selected for deep sampling. This prevents stopped/OOM containers from being
+permanently excluded when the priority set is stable. The cursor is stored
+as reserved metadata in the counter cache and resets with that cache.
+Oversized responses are rejected above 2 MB. A slow stream can exceed the
+cooperative budget, but the outer process limit still protects host sampling.
+This is a maximum latency bound, not a measured production overhead guarantee.
+
+Deep sampling asks Docker top for `pid,stat,pcpu,pmem,comm`. It keeps the union
+of the top 5 CPU, top 5 memory, and first 5 D-state processes, at most 15.
+Counts describe the full returned process list; selected entries are not a
+complete process inventory. CPU is ps lifetime average; memory percentage is
+relative to host RAM. Container CPU is a delta of total CPU/system counters
+multiplied by online CPU count: 100% means one core. Container memory uses
+raw usage and limit (including cache, unlike the Docker CLI's adjusted view).
+
+Block read/write counters sum Read/Write device entries in
+`blkio_stats.io_service_bytes_recursive`; empty accounting is unknown, not zero.
+The rate is a difference divided by elapsed sample epoch seconds. ID and
+StartedAt must match the previous sample, counters must not decrease, and time
+must advance. A missing sample resets the baseline. Listing failure, outer helper timeout, cache write failure and collector restart also invalidate it; recovery starts with unknown rates. The 0600 atomic
+`docker-counters.json` cache stores only counters/identity, not process data.
+
+Evidence is appended to `docker-*.tsv` after the original 11 fields, including
+ID, Compose project/service, health, bytes/rates, D count, bounded JSON process
+sample, and status/reason codes. All evidence therefore participates in the
+existing daily rotation, 14-day compression and 90-day archive expiry. Old
+files render the absent fields as unknown. Empty or unavailable snapshots have
+an empty container name to prevent resurrecting old containers in the UI.
+The listing includes running containers and stopped containers of selected projects. Inspect precedes stats so OOM/restart/state evidence survives stats failure; stopped containers are not queried for stats/top. The original host container/task totals count only running rows. Partial overview samples explicitly report `partial`. Query failures do not
+stop host metrics. Docker anomaly events retain OOM/restart/Z detection and
+add unhealthy/D-state conditions.
+
+The dashboard reads at most 2 MB of the matching Docker TSV. Each expanded
+container offers at most 60 saved samples from that file, selected by full
+container ID (name fallback for legacy records). It aligns each sample with
+the most recent host metric at or before its timestamp within 45 seconds;
+otherwise it marks a gap. History is bounded to the available file tail, does
+not promise an uninterrupted 30-minute history, and does not cross file
+rotation or transparently decompress archives. The last container sample time
+is visible and gaps above 60 seconds relative to host samples are labelled.
+A stopped collector can be recognized from that timestamp. OOM, unhealthy,
+nonzero restart, D or Z counts are warnings; unknown values never trigger a
+normal-state claim. These are correlations rather than automatic diagnoses.

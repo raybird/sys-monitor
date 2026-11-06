@@ -1,0 +1,61 @@
+..............FFFFFF....
+======================================================================
+FAIL: test_cpu_requires_identity_positive_cores_and_forward_time (test_container_probe.RecoveryRegressionTests.test_cpu_requires_identity_positive_cores_and_forward_time) (epoch=130, cores=2, started='')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/raybird/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 254, in test_cpu_requires_identity_positive_cores_and_forward_time
+    self.assertIsNone(rows[0]['cpu_pct'])
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: 20.0 is not None
+
+======================================================================
+FAIL: test_cpu_requires_identity_positive_cores_and_forward_time (test_container_probe.RecoveryRegressionTests.test_cpu_requires_identity_positive_cores_and_forward_time) (epoch=130, cores=0, started='start')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/raybird/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 254, in test_cpu_requires_identity_positive_cores_and_forward_time
+    self.assertIsNone(rows[0]['cpu_pct'])
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0.0 is not None
+
+======================================================================
+FAIL: test_cpu_requires_identity_positive_cores_and_forward_time (test_container_probe.RecoveryRegressionTests.test_cpu_requires_identity_positive_cores_and_forward_time) (epoch=90, cores=2, started='start')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/raybird/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 254, in test_cpu_requires_identity_positive_cores_and_forward_time
+    self.assertIsNone(rows[0]['cpu_pct'])
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^
+AssertionError: 20.0 is not None
+
+======================================================================
+FAIL: test_daemon_outage_invalidates_cpu_and_io_baseline (test_container_probe.RecoveryRegressionTests.test_daemon_outage_invalidates_cpu_and_io_baseline)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/raybird/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 242, in test_daemon_outage_invalidates_cpu_and_io_baseline
+    self.assertIsNone(rows[0]['read_bps'])
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 10.0 is not None
+
+======================================================================
+FAIL: test_exited_oom_is_inspected_without_stats_or_top (test_container_probe.RecoveryRegressionTests.test_exited_oom_is_inspected_without_stats_or_top)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/raybird/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 221, in test_exited_oom_is_inspected_without_stats_or_top
+    self.assertEqual(rows[0]['container'], 'worker')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '' != 'worker'
++ worker
+
+
+======================================================================
+FAIL: test_inspect_evidence_survives_stats_failure (test_container_probe.RecoveryRegressionTests.test_inspect_evidence_survives_stats_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/raybird/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 232, in test_inspect_evidence_survives_stats_failure
+    self.assertEqual(rows[0]['restart_count'], 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: None != 2
+
+----------------------------------------------------------------------
+Ran 22 tests in 9.991s
+
+FAILED (failures=6)
