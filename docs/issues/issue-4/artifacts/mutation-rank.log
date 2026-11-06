@@ -1,0 +1,24 @@
+test_comm_with_parentheses_and_spaces_is_parsed (test_container_probe.ProcessCpuIntervalTests.test_comm_with_parentheses_and_spaces_is_parsed) ... ok
+test_process_gone_before_read_and_clock_not_moving_forward (test_container_probe.ProcessCpuIntervalTests.test_process_gone_before_read_and_clock_not_moving_forward) ... ok
+test_scn001_spiking_long_lived_process_ranks_first_by_interval (test_container_probe.ProcessCpuIntervalTests.test_scn001_spiking_long_lived_process_ranks_first_by_interval) ... FAIL
+test_scn002_without_previous_ranks_by_lifetime_and_says_why (test_container_probe.ProcessCpuIntervalTests.test_scn002_without_previous_ranks_by_lifetime_and_says_why) ... ok
+test_scn003_pid_reuse_new_and_exited_processes (test_container_probe.ProcessCpuIntervalTests.test_scn003_pid_reuse_new_and_exited_processes) ... ok
+test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container (test_container_probe.ProcessCpuIntervalTests.test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container) ... ok
+test_scn005_collect_keeps_readings_of_live_deep_processes_only (test_container_probe.ProcessCpuIntervalTests.test_scn005_collect_keeps_readings_of_live_deep_processes_only) ... ok
+
+======================================================================
+FAIL: test_scn001_spiking_long_lived_process_ranks_first_by_interval (test_container_probe.ProcessCpuIntervalTests.test_scn001_spiking_long_lived_process_ranks_first_by_interval)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/tmp/claude-1000/-home-kevin-Documents-RCodes-sys-monitor/b36fa669-5f24-42eb-b737-f2408f4b7919/scratchpad/m4-rank/tests/test_container_probe.py", line 544, in test_scn001_spiking_long_lived_process_ranks_first_by_interval
+    self.assertEqual(processes[0]['pid'], '99')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: '10' != '99'
+- 10
++ 99
+
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.007s
+
+FAILED (failures=1)

@@ -1,0 +1,185 @@
+EEEEEEEE...FFFFF
+======================================================================
+ERROR: test_comm_with_parentheses_and_spaces_is_parsed (test_container_probe.ProcessCpuIntervalTests.test_comm_with_parentheses_and_spaces_is_parsed)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 519, in setUp
+    patcher.start()
+    ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1667, in start
+    result = self.__enter__()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1510, in __enter__
+    original, local = self.get_original()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1480, in get_original
+    raise AttributeError(
+        "%s does not have the attribute %r" % (target, name)
+    )
+AttributeError: <module 'container_probe' from '/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py'> does not have the attribute 'PROC_ROOT'
+
+======================================================================
+ERROR: test_process_gone_before_read_and_clock_not_moving_forward (test_container_probe.ProcessCpuIntervalTests.test_process_gone_before_read_and_clock_not_moving_forward)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 519, in setUp
+    patcher.start()
+    ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1667, in start
+    result = self.__enter__()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1510, in __enter__
+    original, local = self.get_original()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1480, in get_original
+    raise AttributeError(
+        "%s does not have the attribute %r" % (target, name)
+    )
+AttributeError: <module 'container_probe' from '/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py'> does not have the attribute 'PROC_ROOT'
+
+======================================================================
+ERROR: test_scn001_spiking_long_lived_process_ranks_first_by_interval (test_container_probe.ProcessCpuIntervalTests.test_scn001_spiking_long_lived_process_ranks_first_by_interval)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 519, in setUp
+    patcher.start()
+    ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1667, in start
+    result = self.__enter__()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1510, in __enter__
+    original, local = self.get_original()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1480, in get_original
+    raise AttributeError(
+        "%s does not have the attribute %r" % (target, name)
+    )
+AttributeError: <module 'container_probe' from '/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py'> does not have the attribute 'PROC_ROOT'
+
+======================================================================
+ERROR: test_scn002_without_previous_ranks_by_lifetime_and_says_why (test_container_probe.ProcessCpuIntervalTests.test_scn002_without_previous_ranks_by_lifetime_and_says_why)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 519, in setUp
+    patcher.start()
+    ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1667, in start
+    result = self.__enter__()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1510, in __enter__
+    original, local = self.get_original()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1480, in get_original
+    raise AttributeError(
+        "%s does not have the attribute %r" % (target, name)
+    )
+AttributeError: <module 'container_probe' from '/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py'> does not have the attribute 'PROC_ROOT'
+
+======================================================================
+ERROR: test_scn003_pid_reuse_new_and_exited_processes (test_container_probe.ProcessCpuIntervalTests.test_scn003_pid_reuse_new_and_exited_processes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 519, in setUp
+    patcher.start()
+    ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1667, in start
+    result = self.__enter__()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1510, in __enter__
+    original, local = self.get_original()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1480, in get_original
+    raise AttributeError(
+        "%s does not have the attribute %r" % (target, name)
+    )
+AttributeError: <module 'container_probe' from '/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py'> does not have the attribute 'PROC_ROOT'
+
+======================================================================
+ERROR: test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container (test_container_probe.ProcessCpuIntervalTests.test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 519, in setUp
+    patcher.start()
+    ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1667, in start
+    result = self.__enter__()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1510, in __enter__
+    original, local = self.get_original()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1480, in get_original
+    raise AttributeError(
+        "%s does not have the attribute %r" % (target, name)
+    )
+AttributeError: <module 'container_probe' from '/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py'> does not have the attribute 'PROC_ROOT'
+
+======================================================================
+ERROR: test_scn005_collect_keeps_readings_of_live_deep_processes_only (test_container_probe.ProcessCpuIntervalTests.test_scn005_collect_keeps_readings_of_live_deep_processes_only)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 519, in setUp
+    patcher.start()
+    ~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1667, in start
+    result = self.__enter__()
+  File "/usr/lib/python3.14/unittest/mock.py", line 1510, in __enter__
+    original, local = self.get_original()
+                      ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.14/unittest/mock.py", line 1480, in get_original
+    raise AttributeError(
+        "%s does not have the attribute %r" % (target, name)
+    )
+AttributeError: <module 'container_probe' from '/home/kevin/Documents/RCodes/sys-monitor/src/container_probe.py'> does not have the attribute 'PROC_ROOT'
+
+======================================================================
+ERROR: test_bounded_processes_preserve_dstate_and_never_argv (test_container_probe.CounterTests.test_bounded_processes_preserve_dstate_and_never_argv)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 35, in test_bounded_processes_preserve_dstate_and_never_argv
+    processes, count, zombies, dstate, _ = probe.process_sample({'Titles': titles, 'Processes': rows})
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ValueError: not enough values to unpack (expected 5, got 4)
+
+======================================================================
+FAIL: test_scn001_interval_and_lifetime_are_both_shown (test_freeze_watch.ProcessCpuIntervalDetailTests.test_scn001_interval_and_lifetime_are_both_shown)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 469, in test_scn001_interval_and_lifetime_are_both_shown
+    self.assertIn('PID 99 · S · CPU 區間 85.0%（平均 2.1%）· RAM 3.2% · node', text)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'PID 99 · S · CPU 區間 85.0%（平均 2.1%）· RAM 3.2% · node' not found in '採樣：未知 · 狀態 未知\nID：未知 · 容器狀態 未知\nProject／service：未知／未知\nCPU：未知（區間使用率，100% 為一個核心）\n記憶體／上限：未知\nTasks 未知 · 程序 未知 · D 未知 · Z 未知\nOOM 未知 · 重啟 未知 · Health 未知\n累計 block I/O：讀 未知 B · 寫 未知 B\n讀取 未知 · 寫入 未知\nBlock I/O 不含快取命中的所有檔案讀取；未知可能是首次採樣、計數器重置或核心未提供。\n主機資料缺口：沒有此前 45 秒內的對照樣本\n程序 CPU 為 ps 生命週期平均；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。\nPID 99 · S · CPU 2.1% · RAM 3.2% · node\nPID 17 · S · CPU 9.8% · RAM 1.0% · python\n高負載與事故時間重疊僅是線索，不代表因果。'
+
+======================================================================
+FAIL: test_scn002_scn004_fallback_states_the_reason (test_freeze_watch.ProcessCpuIntervalDetailTests.test_scn002_scn004_fallback_states_the_reason) (reason='no_previous')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 480, in test_scn002_scn004_fallback_states_the_reason
+    self.assertIn(label, text)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+AssertionError: '依生命週期平均排序（尚無前一筆可算區間值）' not found in '採樣：未知 · 狀態 未知\nID：未知 · 容器狀態 未知\nProject／service：未知／未知\nCPU：未知（區間使用率，100% 為一個核心）\n記憶體／上限：未知\nTasks 未知 · 程序 未知 · D 未知 · Z 未知\nOOM 未知 · 重啟 未知 · Health 未知\n累計 block I/O：讀 未知 B · 寫 未知 B\n讀取 未知 · 寫入 未知\nBlock I/O 不含快取命中的所有檔案讀取；未知可能是首次採樣、計數器重置或核心未提供。\n主機資料缺口：沒有此前 45 秒內的對照樣本\n程序 CPU 為 ps 生命週期平均；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。\nPID 5 · R · CPU 4.0% · RAM 1.0% · w\n高負載與事故時間重疊僅是線索，不代表因果。'
+
+======================================================================
+FAIL: test_scn002_scn004_fallback_states_the_reason (test_freeze_watch.ProcessCpuIntervalDetailTests.test_scn002_scn004_fallback_states_the_reason) (reason='over_budget')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 480, in test_scn002_scn004_fallback_states_the_reason
+    self.assertIn(label, text)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+AssertionError: '依生命週期平均排序（超過讀取預算）' not found in '採樣：未知 · 狀態 未知\nID：未知 · 容器狀態 未知\nProject／service：未知／未知\nCPU：未知（區間使用率，100% 為一個核心）\n記憶體／上限：未知\nTasks 未知 · 程序 未知 · D 未知 · Z 未知\nOOM 未知 · 重啟 未知 · Health 未知\n累計 block I/O：讀 未知 B · 寫 未知 B\n讀取 未知 · 寫入 未知\nBlock I/O 不含快取命中的所有檔案讀取；未知可能是首次採樣、計數器重置或核心未提供。\n主機資料缺口：沒有此前 45 秒內的對照樣本\n程序 CPU 為 ps 生命週期平均；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。\nPID 5 · R · CPU 4.0% · RAM 1.0% · w\n高負載與事故時間重疊僅是線索，不代表因果。'
+
+======================================================================
+FAIL: test_scn002_scn004_fallback_states_the_reason (test_freeze_watch.ProcessCpuIntervalDetailTests.test_scn002_scn004_fallback_states_the_reason) (reason='proc_unreadable')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 480, in test_scn002_scn004_fallback_states_the_reason
+    self.assertIn(label, text)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^
+AssertionError: '依生命週期平均排序（無法讀取 /proc）' not found in '採樣：未知 · 狀態 未知\nID：未知 · 容器狀態 未知\nProject／service：未知／未知\nCPU：未知（區間使用率，100% 為一個核心）\n記憶體／上限：未知\nTasks 未知 · 程序 未知 · D 未知 · Z 未知\nOOM 未知 · 重啟 未知 · Health 未知\n累計 block I/O：讀 未知 B · 寫 未知 B\n讀取 未知 · 寫入 未知\nBlock I/O 不含快取命中的所有檔案讀取；未知可能是首次採樣、計數器重置或核心未提供。\n主機資料缺口：沒有此前 45 秒內的對照樣本\n程序 CPU 為 ps 生命週期平均；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。\nPID 5 · R · CPU 4.0% · RAM 1.0% · w\n高負載與事故時間重疊僅是線索，不代表因果。'
+
+======================================================================
+FAIL: test_scn005_old_rows_keep_the_old_wording (test_freeze_watch.ProcessCpuIntervalDetailTests.test_scn005_old_rows_keep_the_old_wording)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 487, in test_scn005_old_rows_keep_the_old_wording
+    self.assertNotIn('區間', text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+AssertionError: '區間' unexpectedly found in '採樣：未知 · 狀態 未知\nID：未知 · 容器狀態 未知\nProject／service：未知／未知\nCPU：未知（區間使用率，100% 為一個核心）\n記憶體／上限：未知\nTasks 未知 · 程序 未知 · D 未知 · Z 未知\nOOM 未知 · 重啟 未知 · Health 未知\n累計 block I/O：讀 未知 B · 寫 未知 B\n讀取 未知 · 寫入 未知\nBlock I/O 不含快取命中的所有檔案讀取；未知可能是首次採樣、計數器重置或核心未提供。\n主機資料缺口：沒有此前 45 秒內的對照樣本\n程序 CPU 為 ps 生命週期平均；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。\nPID 5 · R · CPU 4.0% · RAM 1.0% · w\n高負載與事故時間重疊僅是線索，不代表因果。'
+
+----------------------------------------------------------------------
+Ran 14 tests in 0.005s
+
+FAILED (failures=5, errors=8)

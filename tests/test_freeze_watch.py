@@ -457,6 +457,35 @@ class ContainerBackwardCompatibilityTests(unittest.TestCase):
         self.assertTrue(freeze_watch.container_warning(row, {'restart_count': '1'}))
 
 
+class ProcessCpuIntervalDetailTests(unittest.TestCase):
+    """issue 4（2026-11-06 核准 SCN-001、002、004、005）：容器詳情的程序 CPU。"""
+
+    def detail(self, processes):
+        return freeze_watch.container_detail({'process_sample': json.dumps(processes), 'process_status': 'ok'}, [])
+
+    def test_scn001_interval_and_lifetime_are_both_shown(self):
+        text = self.detail([dict(pid='99', state='S', cpu=2.1, memory=3.2, name='node', cpu_interval=85.0),
+                            dict(pid='17', state='S', cpu=9.8, memory=1.0, name='python', cpu_interval=None)])
+        self.assertIn('PID 99 · S · CPU 區間 85.0%（平均 2.1%） · RAM 3.2% · node', text)
+        self.assertIn('PID 17 · S · CPU 區間 未知（平均 9.8%） · RAM 1.0% · python', text)
+        self.assertIn('程序依兩次採樣之間的區間 CPU 排序', text)
+        self.assertNotIn('程序 CPU 為 ps 生命週期平均', text)
+
+    def test_scn002_scn004_fallback_states_the_reason(self):
+        for reason, label in [('no_previous', '依生命週期平均排序（尚無前一筆可算區間值）'),
+                              ('over_budget', '依生命週期平均排序（超過讀取預算）'),
+                              ('proc_unreadable', '依生命週期平均排序（無法讀取 /proc）')]:
+            with self.subTest(reason=reason):
+                text = self.detail([dict(pid='5', state='R', cpu=4.0, memory=1.0, name='w', cpu_interval=None, cpu_fallback=reason)])
+                self.assertIn(label, text)
+                self.assertIn('CPU 區間 未知（平均 4.0%）', text)
+
+    def test_scn005_old_rows_keep_the_old_wording(self):
+        text = self.detail([dict(pid='5', state='R', cpu=4.0, memory=1.0, name='w')])
+        self.assertIn('PID 5 · R · CPU 4.0% · RAM 1.0% · w', text)
+        self.assertIn('程序 CPU 為 ps 生命週期平均', text)
+        self.assertNotIn('CPU 區間', text)
+
 class ContainerReviewFollowupTests(unittest.TestCase):
     """2026-11-06 使用者「2. 一起修」：PR #3 審查的 S4、S5、S6、S9、N1。"""
 

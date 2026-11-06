@@ -32,13 +32,14 @@ class CounterTests(unittest.TestCase):
         titles = ['PID', 'STAT', '%CPU', '%MEM', 'COMMAND']
         rows = [[str(n), 'R', str(n), str(40-n), 'worker'] for n in range(1, 25)]
         rows.append(['99', 'D', '0', '0', 'io-worker'])
-        processes, count, zombies, dstate = probe.process_sample({'Titles': titles, 'Processes': rows})
+        processes, count, zombies, dstate, _ = probe.process_sample({'Titles': titles, 'Processes': rows})
         self.assertLessEqual(len(processes), 15)
         self.assertEqual(count, 25)
         self.assertEqual(zombies, 0)
         self.assertEqual(dstate, 1)
         self.assertTrue(any(p['pid'] == '99' for p in processes))
-        self.assertEqual(set(processes[0]), {'pid', 'state', 'cpu', 'memory', 'name'})
+        # issue 4 (SCN-001, approved 2026-11-06) adds the interval CPU and, without one, the reason.
+        self.assertEqual(set(processes[0]), {'pid', 'state', 'cpu', 'memory', 'name', 'cpu_interval', 'cpu_fallback'})
 
     def test_no_process_output_is_unknown(self):
         with self.assertRaises(ValueError):
@@ -504,6 +505,140 @@ print(json.dumps(dict(elapsed=time.monotonic() - started, state=state,
             shell_row.pop(key)
         self.assertEqual(helper_row, shell_row)
 
+
+class ProcessCpuIntervalTests(unittest.TestCase):
+    """issue 4（2026-11-06 核准 SCN-001～005）：程序依兩次採樣之間的區間 CPU 排序。"""
+
+    TITLES = ['PID', 'STAT', '%CPU', '%MEM', 'COMMAND']
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.proc = Path(self.temp.name)
+        for target, value in (('PROC_ROOT', self.proc), ('CLK_TCK', 100)):
+            patcher = patch.object(probe, target, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+        self.addCleanup(self.temp.cleanup)
+
+    def stat(self, pid, utime, stime, start, comm='worker'):
+        # Fields after the comm: state, then utime is the 12th, stime the 13th, starttime the 20th.
+        rest = ['S'] + ['0'] * 10 + [str(utime), str(stime)] + ['0'] * 6 + [str(start)] + ['0'] * 5
+        (self.proc / str(pid)).mkdir()
+        (self.proc / str(pid) / 'stat').write_text(f"{pid} ({comm}) " + ' '.join(rest) + '\n')
+
+    def sample(self, rows, previous, now):
+        with patch.object(probe, 'boot_seconds', return_value=now):
+            return probe.process_sample({'Titles': self.TITLES, 'Processes': rows}, previous)
+
+    def test_scn001_spiking_long_lived_process_ranks_first_by_interval(self):
+        # Six idle processes with a high lifetime average and more memory, one
+        # long-lived process that spent 5 s of the last 10 s on CPU.
+        rows = [[str(pid), 'S', '40', '10', 'idle'] for pid in range(10, 16)] + [['99', 'S', '1', '0', 'spiking']]
+        previous = {'at': 1000.0, 'procs': {str(pid): [100, 5000] for pid in range(10, 16)}}
+        previous['procs']['99'] = [100, 200]
+        for pid in range(10, 16):
+            self.stat(pid, 5000, 0, 100)
+        self.stat(99, 600, 100, 100)
+        processes, count, _, _, snapshot = self.sample(rows, previous, 1010.0)
+        self.assertEqual(count, 7)
+        self.assertEqual(processes[0]['pid'], '99')
+        self.assertEqual(processes[0]['cpu_interval'], 50.0)
+        self.assertEqual(processes[0]['cpu'], 1.0)
+        self.assertEqual({p['cpu_interval'] for p in processes[1:]}, {0.0})
+        self.assertNotIn('cpu_fallback', processes[0])
+        self.assertEqual(snapshot, {'at': 1010.0, 'procs': {**{str(pid): [100, 5000] for pid in range(10, 16)}, '99': [100, 700]}})
+
+    def test_scn002_without_previous_ranks_by_lifetime_and_says_why(self):
+        rows = [['10', 'S', '40', '1', 'busy-before'], ['20', 'S', '1', '1', 'other']]
+        self.stat(10, 100, 0, 100)
+        self.stat(20, 900, 0, 100)
+        for previous in (None, {}, {'at': 1010.0, 'procs': {'10': [100, 50]}}):
+            with self.subTest(previous=previous):
+                processes, _, _, _, snapshot = self.sample(rows, previous, 1010.0)
+                self.assertEqual([p['pid'] for p in processes], ['10', '20'])
+                self.assertEqual({p['cpu_interval'] for p in processes}, {None})
+                self.assertEqual({p['cpu_fallback'] for p in processes}, {'no_previous'})
+                # The readings still seed the next round.
+                self.assertEqual(snapshot['procs'], {'10': [100, 100], '20': [100, 900]})
+
+    def test_scn003_pid_reuse_new_and_exited_processes(self):
+        # The old PID 10 has fewer ticks than the new one, so only starttime tells them apart.
+        previous = {'at': 1000.0, 'procs': {'10': [100, 100], '30': [100, 5]}}
+        # PID 10 was reused by a process started at 1002.5 s: 4 s of CPU in 7.5 s.
+        self.stat(10, 300, 100, 100250)
+        # PID 40 started at 1005 s: 2.5 s of CPU in 5 s.
+        self.stat(40, 250, 0, 100500)
+        # PID 50 is unknown to the previous round yet started before it.
+        self.stat(50, 10, 0, 50000)
+        rows = [['10', 'S', '9', '1', 'reused'], ['40', 'S', '9', '1', 'new'], ['50', 'S', '9', '1', 'missed']]
+        processes, _, _, _, snapshot = self.sample(rows, previous, 1010.0)
+        values = {p['pid']: p['cpu_interval'] for p in processes}
+        self.assertEqual(values, {'10': 53.3, '40': 50.0, '50': None})
+        self.assertEqual([p['pid'] for p in processes], ['10', '40', '50'])
+        self.assertEqual(set(snapshot['procs']), {'10', '40', '50'})
+
+    def test_scn004_over_count_over_time_or_unreadable_falls_back_for_the_whole_container(self):
+        many = [[str(pid), 'S', '1', '1', 'w'] for pid in range(1, 1026)]
+        processes, count, _, _, snapshot = self.sample(many, {'at': 1.0, 'procs': {}}, 1010.0)
+        self.assertEqual(count, 1025)
+        self.assertEqual({p['cpu_fallback'] for p in processes}, {'over_budget'})
+        self.assertIsNone(snapshot)
+        rows = [['10', 'S', '40', '1', 'a'], ['20', 'S', '1', '1', 'b']]
+        self.stat(10, 100, 0, 100)
+        self.stat(20, 900, 0, 100)
+        previous = {'at': 1000.0, 'procs': {'10': [100, 0], '20': [100, 0]}}
+        with patch.object(probe, 'PROC_BUDGET_SECONDS', -1):
+            processes, _, _, _, snapshot = self.sample(rows, previous, 1010.0)
+        self.assertEqual({p['cpu_fallback'] for p in processes}, {'over_budget'})
+        self.assertEqual([p['pid'] for p in processes], ['10', '20'])
+        self.assertIsNone(snapshot)
+        (self.proc / '20' / 'stat').chmod(0)
+        self.addCleanup((self.proc / '20' / 'stat').chmod, 0o644)
+        processes, _, _, _, snapshot = self.sample(rows, previous, 1010.0)
+        self.assertEqual({p['cpu_fallback'] for p in processes}, {'proc_unreadable'})
+        self.assertEqual({p['cpu_interval'] for p in processes}, {None})
+        self.assertIsNone(snapshot)
+
+    def test_process_gone_before_read_and_clock_not_moving_forward(self):
+        rows = [['10', 'S', '1', '1', 'a'], ['20', 'S', '1', '1', 'exited']]
+        self.stat(10, 300, 0, 100)
+        previous = {'at': 1000.0, 'procs': {'10': [100, 100], '20': [100, 100]}}
+        processes, _, _, _, snapshot = self.sample(rows, previous, 1010.0)
+        self.assertEqual({p['pid']: p['cpu_interval'] for p in processes}, {'10': 20.0, '20': None})
+        self.assertEqual(set(snapshot['procs']), {'10'})
+        processes, _, _, _, _ = self.sample(rows, previous, 1000.0)
+        self.assertEqual({p['cpu_fallback'] for p in processes}, {'no_previous'})
+
+    def test_comm_with_parentheses_and_spaces_is_parsed(self):
+        self.stat(10, 300, 0, 100, comm='a) (b c')
+        processes, _, _, _, _ = self.sample([['10', 'S', '1', '1', 'x']], {'at': 1000.0, 'procs': {'10': [100, 100]}}, 1010.0)
+        self.assertEqual(processes[0]['cpu_interval'], 20.0)
+
+    def test_scn005_collect_keeps_readings_of_live_deep_processes_only(self):
+        listing = {'procs': [['10', 'S', '1', '1', 'a'], ['20', 'S', '1', '1', 'b']]}
+
+        class Engine(RecoveryRegressionTests.EngineFixture):
+            def get(inner, path):
+                if '/top?' in path:
+                    return {'Titles': self.TITLES, 'Processes': listing['procs']}
+                return super().get(path)
+
+        self.stat(10, 100, 0, 100)
+        self.stat(20, 100, 0, 100)
+        with tempfile.TemporaryDirectory() as td:
+            with patch.object(probe, 'boot_seconds', return_value=1000.0):
+                RecoveryRegressionTests().sample(td, Engine())
+            (self.proc / '10' / 'stat').unlink()
+            (self.proc / '10').rmdir()
+            self.stat(10, 500, 0, 100)
+            listing['procs'] = [['10', 'S', '1', '1', 'a']]
+            with patch.object(probe, 'boot_seconds', return_value=1010.0):
+                _, rows = RecoveryRegressionTests().sample(td, Engine(), epoch=130)
+            cache = json.loads((Path(td) / 'docker-counters.json').read_text())
+        processes = json.loads(rows[0]['process_sample'])
+        self.assertEqual(processes, [dict(pid='10', state='S', cpu=1.0, memory=1.0, name='a', cpu_interval=40.0)])
+        self.assertEqual(rows[0]['process_status'], 'ok')
+        self.assertEqual(cache['abc']['procs'], {'at': 1010.0, 'procs': {'10': [100, 500]}})
 
 class RestartBaselineTests(unittest.TestCase):
     """issue 5（2026-11-06）：收集器端重啟基準的合併與一天刪除（review-a7c2c36 S1）。"""

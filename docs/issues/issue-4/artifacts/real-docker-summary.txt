@@ -1,0 +1,5 @@
+# 2026-11-06 以真實 Docker 唯讀執行 helper 兩輪（間隔約 10 秒）的摘要
+# 原始輸出含本機容器名稱與 ID，repo 公開，只保留摘要
+round1 exit=0 state=ok 0.097s tracked_processes_by_basis={'no_previous': 15}
+round2 exit=0 state=ok 0.099s tracked_processes_by_basis={'interval': 15}
+cache: 6 containers with procs, 15 processes

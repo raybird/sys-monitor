@@ -873,7 +873,6 @@ def container_detail(row: dict[str, str], metrics: list[dict[str, str]]) -> str:
                      f"I/O PSI {host.get('io_psi_avg10', '未知')}% · RAM PSI {host.get('memory_psi_avg10', '未知')}%")
     else:
         lines.append('主機資料缺口：沒有此前 45 秒內的對照樣本')
-    lines.append('程序 CPU 為 ps 生命週期平均；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。')
     status = value('process_status')
     descriptions = {'stopped': '容器已停止，無即時負載／程序', 'not_tracked': '未選取此 Compose project', 'budget_or_limit': '本輪預算／容器數上限，等待輪替',
                     'unavailable_or_timeout': '權限、容器消失、格式不支援或查詢逾時', 'NA': '舊紀錄未提供'}
@@ -881,12 +880,28 @@ def container_detail(row: dict[str, str], metrics: list[dict[str, str]]) -> str:
         processes = json.loads(row.get('process_sample', 'NA'))
         if not isinstance(processes, list):
             raise ValueError('not a list')
+        process_lines = []
         for process in processes[:15]:
-            lines.append(f"PID {process['pid']} · {process['state']} · CPU {process['cpu']}% · RAM {process['memory']}% · {process['name']}")
+            cpu = f"CPU {process['cpu']}%"
+            if 'cpu_interval' in process:
+                interval = '未知' if process['cpu_interval'] is None else f"{process['cpu_interval']}%"
+                cpu = f"CPU 區間 {interval}（平均 {process['cpu']}%）"
+            process_lines.append(f"PID {process['pid']} · {process['state']} · {cpu} · RAM {process['memory']}% · {process['name']}")
         if not processes:
-            lines.append('此樣本無程序')
-    except (ValueError, TypeError, KeyError):
-        lines.append(f"程序：未知（{descriptions.get(status, status)}）")
+            process_lines.append('此樣本無程序')
+    except (ValueError, TypeError, KeyError, AttributeError):
+        processes, process_lines = [], [f"程序：未知（{descriptions.get(status, status)}）"]
+    # Rows before issue 4 carry no cpu_interval and were ranked by the ps lifetime average.
+    fallback = next((p.get('cpu_fallback') for p in processes if isinstance(p, dict) and p.get('cpu_fallback')), None)
+    if fallback:
+        reason = {'no_previous': '尚無前一筆可算區間值', 'over_budget': '超過讀取預算', 'proc_unreadable': '無法讀取 /proc'}.get(fallback, fallback)
+        ranking = f'程序依生命週期平均排序（{reason}）'
+    elif any(isinstance(p, dict) and 'cpu_interval' in p for p in processes):
+        ranking = '程序依兩次採樣之間的區間 CPU 排序（100% 為一個核心），括號內為 ps 生命週期平均'
+    else:
+        ranking = '程序 CPU 為 ps 生命週期平均'
+    lines.append(f'{ranking}；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。')
+    lines.extend(process_lines)
     lines.append('高負載與事故時間重疊僅是線索，不代表因果。')
     return '\n'.join(lines)
 

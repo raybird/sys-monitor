@@ -1,0 +1,3 @@
+first : {'pid': '2797998', 'state': 'R', 'cpu': 16.7, 'memory': 0.0, 'name': 'python3', 'cpu_interval': None, 'cpu_fallback': 'no_previous'}
+second: {'pid': '2797998', 'state': 'R', 'cpu': 41.3, 'memory': 0.0, 'name': 'python3', 'cpu_interval': 100.0}
+clk_tck=100 elapsed≈5s

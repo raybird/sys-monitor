@@ -221,9 +221,13 @@ so on). Incident review locates the 2 MB of container records that end at the
 incident, so an incident early in a day's file still finds them. Only tracked projects raise warnings: OOM, unhealthy healthcheck,
 zombies, a restart since the previous sample, or at least 4 D-state processes
 (8 for event log entries, matching the host thresholds). An old restart count
-alone is not a warning. Process CPU is the ps lifetime average, so a long-lived
-process that just spiked may not rank in the top 5. These are diagnostic clues,
-not proof of a freeze.
+alone is not a warning. The top 5 CPU processes are ranked by their CPU between
+two deep samples, read from the host's `/proc` (100% is one core), so a
+long-lived process that just spiked ranks first; the ps lifetime average is
+shown alongside. A container's first deep sample, or one with more than 1024
+processes, a `/proc` read over 0.2 s or an unreadable `/proc`, falls back to the
+lifetime ranking and says why. These are diagnostic clues, not proof of a
+freeze.
 
 Each container row takes roughly 0.4 KB: eight containers every 30 seconds add
 about 10 MB a day before compression, about 130 MB over the 14 raw days.

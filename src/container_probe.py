@@ -25,6 +25,11 @@ FIELDS = [
 BUDGET_SECONDS = 6
 MAX_CONTAINERS = 32
 MAX_DEEP = 8
+# Interval CPU of container processes, read from the host's /proc (issue 4).
+PROC_ROOT = Path('/proc')
+CLK_TCK = os.sysconf('SC_CLK_TCK')
+MAX_PROC_READS = 1024
+PROC_BUDGET_SECONDS = 0.2
 
 
 class Engine:
@@ -134,7 +139,54 @@ def io_rates(previous: dict, identity: str, started: str, epoch: float,
     return (read - old_read) / elapsed, (write - old_write) / elapsed
 
 
-def process_sample(data: dict) -> tuple[list[dict], int, int, int]:
+def boot_seconds() -> float:
+    """Seconds since boot, the clock /proc starttime counts in."""
+    return time.clock_gettime(time.CLOCK_BOOTTIME)
+
+
+def read_proc_times(pids: list[str]) -> tuple[dict[str, list[int]], str | None]:
+    """[starttime, utime+stime] in ticks per PID, or the reason none are usable."""
+    if len(pids) > MAX_PROC_READS:
+        return {}, 'over_budget'
+    started = time.monotonic()
+    times = {}
+    for pid in pids:
+        if time.monotonic() - started > PROC_BUDGET_SECONDS:
+            return {}, 'over_budget'
+        try:
+            if not pid.isdigit():
+                raise ValueError('pid')
+            data = (PROC_ROOT / pid / 'stat').read_bytes()
+        except FileNotFoundError:
+            continue  # exited after Docker top listed it
+        except (OSError, ValueError):
+            return {}, 'proc_unreadable'
+        try:
+            # The comm may hold spaces and parentheses; fields resume after the last ')'.
+            fields = data[data.rindex(b')') + 2:].split()
+            times[pid] = [int(fields[19]), int(fields[11]) + int(fields[12])]
+        except (ValueError, IndexError):
+            return {}, 'proc_unreadable'
+    return times, None
+
+
+def interval_cpu(pid: str, times: dict, previous: dict, previous_at: float, at: float) -> float | None:
+    """Percent of one core between two readings; None when it cannot be told."""
+    if pid not in times:
+        return None
+    start, ticks = times[pid]
+    old = previous.get(pid)
+    if isinstance(old, list) and len(old) == 2 and old[0] == start and ticks >= old[1]:
+        return round((ticks - old[1]) / CLK_TCK / (at - previous_at) * 100, 1)
+    # Same PID with another starttime is a new process; one started after the
+    # previous reading is measured over its own life.
+    born = start / CLK_TCK
+    if previous_at <= born < at:
+        return round(ticks / CLK_TCK / (at - born) * 100, 1)
+    return None
+
+
+def process_sample(data: dict, previous: dict | None = None) -> tuple[list[dict], int, int, int, dict | None]:
     titles = [title.upper() for title in data.get('Titles', [])]
     required = ['PID', 'STAT', '%CPU', '%MEM', 'COMMAND']
     if not all(title in titles for title in required):
@@ -145,8 +197,25 @@ def process_sample(data: dict) -> tuple[list[dict], int, int, int]:
         pid, state, cpu, memory, name = (row[i] for i in positions)
         # comm is requested, never args; control characters cannot break the TSV.
         processes.append(dict(pid=pid, state=state, cpu=float(cpu), memory=float(memory), name=name[:80]))
+    times, fallback = read_proc_times([p['pid'] for p in processes])
+    at = boot_seconds()
+    snapshot = None if fallback else {'at': at, 'procs': times}
+    previous = previous if isinstance(previous, dict) else {}
+    previous_at, previous_procs = previous.get('at'), previous.get('procs')
+    if fallback is None and (not isinstance(previous_at, (int, float)) or not isinstance(previous_procs, dict)
+                             or at <= previous_at):
+        fallback = 'no_previous'
+    for process in processes:
+        if fallback:
+            process.update(cpu_interval=None, cpu_fallback=fallback)
+        else:
+            process['cpu_interval'] = interval_cpu(process['pid'], times, previous_procs, previous_at, at)
+    if fallback:
+        rank = lambda p: p['cpu']
+    else:
+        rank = lambda p: -1 if p['cpu_interval'] is None else p['cpu_interval']
     selected = {}
-    groups = [sorted(processes, key=lambda p: p['cpu'], reverse=True)[:5],
+    groups = [sorted(processes, key=rank, reverse=True)[:5],
               sorted(processes, key=lambda p: p['memory'], reverse=True)[:5],
               [p for p in processes if p['state'].startswith('D')][:5]]
     for group in groups:
@@ -154,7 +223,7 @@ def process_sample(data: dict) -> tuple[list[dict], int, int, int]:
             selected[process['pid']] = process
     return (list(selected.values()), len(processes),
             sum(p['state'].startswith('Z') for p in processes),
-            sum(p['state'].startswith('D') for p in processes))
+            sum(p['state'].startswith('D') for p in processes), snapshot)
 
 
 def invalidate_cache(path: Path) -> None:
@@ -276,7 +345,9 @@ def collect(timestamp: str, epoch: int, projects: str, state_dir: Path) -> tuple
             if identity in deep:
                 try:
                     data = engine.get(f'/containers/{identity}/top?ps_args=' + quote('-eo pid,stat,pcpu,pmem,comm'))
-                    processes, count, zombies, dstate = process_sample(data)
+                    processes, count, zombies, dstate, snapshot = process_sample(data, previous.get('procs'))
+                    if snapshot:
+                        counters[identity]['procs'] = snapshot
                     row.update(processes=count, zombies=zombies, dstate=dstate,
                                process_sample=json.dumps(processes, ensure_ascii=True, separators=(',', ':')), process_status='ok')
                 except (OSError, ValueError, IndexError, TypeError):

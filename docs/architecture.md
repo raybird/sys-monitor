@@ -190,9 +190,19 @@ it.
 Deep sampling asks Docker top for `pid,stat,pcpu,pmem,comm`. It keeps the union
 of the top 5 CPU, top 5 memory, and first 5 D-state processes, at most 15.
 Counts describe the full returned process list; selected entries are not a
-complete process inventory. CPU is ps lifetime average, so a long-lived
-process that spikes may not rank in the top 5; memory percentage is
-relative to host RAM. Container CPU is a delta of total CPU/system counters
+complete process inventory. The top 5 CPU are ranked by interval CPU: the
+helper reads `/proc/<pid>/stat` on the host for the PIDs Docker top returned
+(host PIDs) and divides the utime+stime ticks gained since the container's
+previous deep sample by `SC_CLK_TCK` and by the elapsed `CLOCK_BOOTTIME`
+seconds; 100% means one core. A PID whose starttime changed is a new process,
+and a process started after the previous reading is measured over its own
+life. Each entry keeps the ps lifetime `cpu` and adds `cpu_interval` (null when
+unknown). The whole container falls back to the lifetime ranking, with
+`cpu_fallback` naming why on every entry, when there is no previous reading
+(`no_previous`: first deep sample, collector restart, cache loss or a clock
+that did not advance), when it has more than 1024 processes or reading takes
+over 0.2 s (`over_budget`), or when `/proc` cannot be read (`proc_unreadable`).
+Memory percentage is relative to host RAM. Container CPU is a delta of total CPU/system counters
 multiplied by online CPU count: 100% means one core. Container memory uses
 raw usage and limit (including cache, unlike the Docker CLI's adjusted view).
 
@@ -205,7 +215,11 @@ stopped container reports year 1). CPU, I/O rates and percentages are rounded
 to 2, 1 and 2 decimals. ID and
 StartedAt must match the previous sample, counters must not decrease, and time
 must advance. A missing sample resets the baseline. Listing failure, outer helper timeout, cache write failure and collector restart also invalidate it; recovery starts with unknown rates. The 0600 atomic
-`docker-counters.json` cache stores only counters/identity, not process data.
+`docker-counters.json` cache stores counters/identity and, for containers
+deep-sampled this round, `[starttime, ticks]` per live PID with the reading
+time; it holds no process names or arguments, and a container not deep-sampled
+this round loses its readings, so with more than 8 tracked running containers
+the rotation makes each one start again from `no_previous`.
 
 Evidence is appended to `docker-*.tsv` after the original 11 fields, including
 ID, Compose project/service, health, bytes/rates, D count, bounded JSON process
@@ -250,4 +264,4 @@ so right after a file rotation it has no earlier sample to compare restarts
 with; the event log, kept by the collector across rotation, is the complete
 record. These are correlations rather than automatic diagnoses.
 
-最後驗證日期：2026-11-06（容器警示判準、跨重啟回看）。
+最後驗證日期：2026-11-06（容器警示判準、跨重啟回看、程序區間 CPU）。
