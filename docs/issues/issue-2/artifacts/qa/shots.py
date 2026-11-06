@@ -47,7 +47,7 @@ for mode in ('live', 'review'):
     pump()
     labels = [w.get_text() for w in descendants(app.container_list) if isinstance(w, Gtk.Label)]
     print(mode, 'labels:', [l for l in labels if l][:40])
-    print(mode, 'warm rows:', [w.get_text() for w in descendants(app.container_list) if isinstance(w, Gtk.Label) and w.has_css_class('warm')])
+    print(mode, 'warm rows:', [w.get_text() for w in descendants(app.container_list) if isinstance(w, Gtk.Label) and w.has_css_class('warm')]); print(mode, 'unknown rows:', [w.get_text() for w in descendants(app.container_list) if isinstance(w, Gtk.Label) and w.has_css_class('unknown')])
     print(mode, 'hero_docker:', app.labels['hero_docker'].get_text() if 'hero_docker' in app.labels else None)
     for theme, dark in (('Adwaita', False), ('Adwaita', True)):
         settings.set_property('gtk-theme-name', theme)
