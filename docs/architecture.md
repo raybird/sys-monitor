@@ -222,10 +222,15 @@ containers, or above 8 tracked running containers for process counts, they are
 a subset.
 The listing includes running containers and stopped containers of selected projects. Inspect precedes stats so OOM/restart/state evidence survives stats failure; stopped containers are not queried for stats/top. The original host container/task totals count only running rows. Partial overview samples explicitly report `partial`. Query failures do not
 stop host metrics. Docker anomaly events cover tracked projects only: OOM,
-unhealthy, Z above 0, a restart count above the previous sample of the same
-container ID (no baseline after a collector restart or an unavailable sample),
-or D at the host WARN threshold of 8. The event text records D as a threshold
-flag rather than a count, so a fluctuating D does not repeat the event.
+unhealthy, Z above 0, a restart count above the latest valid sample of the
+same container ID, or D at the host WARN threshold of 8. The collector keeps
+that baseline per ID in memory across rounds: a round where Docker is
+unavailable, or a container whose inspect failed, leaves it untouched, so a
+restart that happened meanwhile still logs an event. Entries not refreshed for
+a day are dropped, and a collector restart starts with none. A round without
+Docker data also keeps the last recorded anomaly, so an ongoing anomaly is not
+logged again afterwards. The event text records Z and D as flags rather than
+counts, so fluctuating counts do not repeat the event.
 
 The live dashboard reads at most 2 MB of the newest Docker TSV. Incident review
 instead locates, by binary search on the epoch column, the 2 MB that end at the
@@ -238,8 +243,11 @@ not promise an uninterrupted 30-minute history, and does not cross file
 rotation or transparently decompress archives. The last container sample time
 is visible and gaps above 60 seconds relative to host samples are labelled.
 A stopped collector can be recognized from that timestamp. For tracked
-projects, OOM, unhealthy, Z above 0, a restart since the previous saved sample
-or D of at least 4 (the host elevated threshold) are warnings; unknown values
-never trigger a normal-state claim. These are correlations rather than automatic diagnoses.
+projects, OOM, unhealthy, Z above 0, a restart count above the latest earlier
+saved sample that has one, or D of at least 4 (the host elevated threshold) are warnings; unknown values
+never trigger a normal-state claim. The dashboard only sees the loaded window,
+so right after a file rotation it has no earlier sample to compare restarts
+with; the event log, kept by the collector across rotation, is the complete
+record. These are correlations rather than automatic diagnoses.
 
 最後驗證日期：2026-11-06（容器警示判準、跨重啟回看）。

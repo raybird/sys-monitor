@@ -79,10 +79,17 @@ def unavailable_reason(error: BaseException) -> str:
 
 def read_time(stats: dict, fallback: float) -> float:
     """When Docker read the counters; the loop start only if that is unusable."""
+    # Docker sends RFC 3339 with up to nine fraction digits and a Z suffix.
+    # Before Python 3.11 fromisoformat takes neither, so normalise first.
+    match = re.fullmatch(r'(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.(\d+))?(Z|[+-]\d\d:\d\d)',
+                         stats.get('read') if isinstance(stats.get('read'), str) else '')
+    if not match:
+        return fallback
+    base, fraction, zone = match.groups()
+    text = f"{base}.{(fraction or '').ljust(6, '0')[:6]}{'+00:00' if zone == 'Z' else zone}"
     try:
-        # Docker reports nanoseconds; older Pythons parse at most microseconds.
-        value = datetime.fromisoformat(re.sub(r'(\.\d{6})\d+', r'\1', stats['read'])).timestamp()
-    except (KeyError, TypeError, ValueError):
+        value = datetime.fromisoformat(text).timestamp()
+    except ValueError:
         return fallback
     # A stopped container reports year 1, which is no sample time at all.
     return value if value > 946_684_800 else fallback

@@ -158,7 +158,7 @@ def read_tsv_before(path: Path | None, fields: list[str], end_epoch: int,
                     return start, int(parts[1])
                 except (IndexError, ValueError):
                     # The header, or the end of the file.
-                    return start, None if line else size + 1
+                    return start, None if line else math.inf
 
             low, high = 0, size
             while low < high:
@@ -851,11 +851,13 @@ def container_detail(row: dict[str, str], metrics: list[dict[str, str]]) -> str:
         number = as_float(row.get(key))
         return '未知' if number is None else f'{number / 1024:.1f} KiB/s'
 
+    cpu_text = value('cpu_pct').rstrip('%')
+    cpu_text = cpu_text if cpu_text == '未知' else f"{cpu_text}%"
     health = {'not_configured': '未設定 healthcheck', 'healthy': '健康',
               'unhealthy': '不健康', 'starting': '啟動中'}.get(value('health'), value('health'))
     lines = [f"採樣：{value('timestamp')} · 狀態 {value('sample_status')}",
              f"ID：{value('container_id')} · 容器狀態 {value('container_state')}", f"Project／service：{value('project')}／{value('service')}",
-             f"CPU：{value('cpu_pct').rstrip('%')}%（區間使用率，100% 為一個核心）",
+             f"CPU：{cpu_text}（區間使用率，100% 為一個核心）",
              f"記憶體／上限：{value('memory_usage')}",
              f"Tasks {value('tasks')} · 程序 {value('processes')} · D {value('dstate')} · Z {value('zombies')}",
              f"OOM {value('oom_killed')} · 重啟 {value('restart_count')} · Health {health}",
@@ -887,6 +889,11 @@ def container_detail(row: dict[str, str], metrics: list[dict[str, str]]) -> str:
         lines.append(f"程序：未知（{descriptions.get(status, status)}）")
     lines.append('高負載與事故時間重疊僅是線索，不代表因果。')
     return '\n'.join(lines)
+
+
+def previous_restart_sample(history: list[dict[str, str]]) -> dict[str, str] | None:
+    """The latest sample with a restart count, the baseline the collector also keeps."""
+    return next((row for row in reversed(history) if as_int(row.get('restart_count')) is not None), None)
 
 
 def container_warning(row: dict[str, str], previous: dict[str, str] | None = None) -> bool:
@@ -1507,7 +1514,7 @@ class FreezeWatch(Gtk.Application):
                 child = child.get_next_sibling()
 
         return self.container_list is not None and any(
-            isinstance(widget, Gtk.Popover) and widget.get_visible()
+            isinstance(widget, Gtk.Popover) and widget.get_mapped()
             for widget in descendants(self.container_list)
         )
 
@@ -1524,7 +1531,7 @@ class FreezeWatch(Gtk.Application):
         content = Gtk.Box(spacing=10)
         name = self._label(row.get("container", "unknown"), None, ellipsize=True)
         name.set_hexpand(True)
-        summary, style = container_summary(row, history[-2] if len(history) > 1 else None)
+        summary, style = container_summary(row, previous_restart_sample(history[:-1]))
         detail_label = self._label(summary, style, 1, ellipsize=True)
         content.append(name)
         content.append(detail_label)

@@ -13,7 +13,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            python3-gi python3-dbus gir1.2-gtk-4.0 shellcheck xvfb \
+            python3-gi python3-gi-cairo python3-dbus gir1.2-gtk-4.0 shellcheck xvfb \
             desktop-file-utils
       - name: Run checks
         run: ./scripts/check.sh

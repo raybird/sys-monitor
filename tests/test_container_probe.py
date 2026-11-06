@@ -122,7 +122,9 @@ class CollectorIntegrationTests(CollectorHarness):
             rows = list(csv.DictReader(next(state.glob('docker-*.tsv')).read_text().splitlines(), delimiter='\t'))
             self.assertEqual(rows[0]['container'], '')
             self.assertEqual(rows[0]['sample_status'], 'unavailable')
-            self.assertEqual(len(list(csv.DictReader(next(state.glob('metrics-*.tsv')).read_text().splitlines(), delimiter='\t'))), 1)
+            metrics = list(csv.DictReader(next(state.glob('metrics-*.tsv')).read_text().splitlines(), delimiter='\t'))
+            self.assertEqual(len(metrics), 1)
+            self.assertEqual(metrics[0]['docker_state'], 'unavailable:helper_failed')
 
 class ContainerAlertTests(unittest.TestCase):
     # 2026-11-06 使用者決定（S3）：只警示追蹤中的容器；重啟以相對前一次採樣的增加
@@ -233,11 +235,14 @@ class FailureAndLimitTests(unittest.TestCase):
 
 class HardTimeoutTest(CollectorHarness):
     def test_hung_helper_has_hard_limit_and_host_survives(self):
+        import csv
         started = time.monotonic()
         with tempfile.TemporaryDirectory() as td:
             state = self.run_collector(td, 'import sys,time\nfrom pathlib import Path\n(Path(sys.argv[4])/"docker-counters.json").write_text("{}")\ntime.sleep(60)\n')
             self.assertTrue(next(state.glob('metrics-*.tsv')).read_text().count('\n') >= 2)
             self.assertFalse((state / 'docker-counters.json').exists())
+            metrics = next(csv.DictReader(next(state.glob('metrics-*.tsv')).read_text().splitlines(), delimiter='\t'))
+            self.assertEqual(metrics['docker_state'], 'unavailable:timeout')
         self.assertLess(time.monotonic() - started, 11)
 
 class RecoveryRegressionTests(unittest.TestCase):
@@ -498,3 +503,57 @@ print(json.dumps(dict(elapsed=time.monotonic() - started, state=state,
             helper_row.pop(key)
             shell_row.pop(key)
         self.assertEqual(helper_row, shell_row)
+
+
+class IntegratedReviewFollowupTests(unittest.TestCase):
+    """2026-11-06 使用者「都依照建議修」：整合後審查的 M1、N1、S1。"""
+
+    def test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events(self):
+        import os
+        import subprocess
+        fields = repr(probe.FIELDS)
+        # Docker samples 1..5: ok, helper fails, ok, helper fails, ok with one more restart.
+        body = (
+            "import csv, sys\nfrom pathlib import Path\n"
+            "calls = Path(sys.argv[4]) / 'calls'\n"
+            "n = int(calls.read_text()) + 1 if calls.exists() else 1\n"
+            "calls.write_text(str(n))\n"
+            "if n in (2, 4):\n    raise SystemExit(1)\n"
+            "def row(**kw):\n"
+            "    r = dict.fromkeys(" + fields + ", 'NA')\n"
+            "    r.update(timestamp=sys.argv[1], epoch=sys.argv[2], zombies=0, oom_killed='false', health='healthy',\n"
+            "             sample_status='ok', process_status='ok', container_state='running', dstate=0, restart_count=0)\n"
+            "    r.update(kw)\n"
+            "    return [r[k] for k in " + fields + "]\n"
+            "print('ok')\n"
+            "w = csv.writer(sys.stdout, delimiter='\\t', lineterminator='\\n')\n"
+            "w.writerow(row(container='worker', container_id='w1', is_tracked_project=1, restart_count=1 if n < 5 else 2))\n"
+            "w.writerow(row(container='db', container_id='d1', is_tracked_project=1, health='unhealthy'))\n"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            helper = Path(td) / 'probe.py'
+            helper.write_text(body)
+            env = dict(os.environ, XDG_STATE_HOME=td, FREEZE_WATCH_CONTAINER_PROBE=str(helper),
+                       FREEZE_WATCH_PYTHON='/usr/bin/python3', FREEZE_WATCH_MAX_SAMPLES='13',
+                       FREEZE_WATCH_INTERVAL_SECONDS='1', FREEZE_WATCH_JOURNALCTL='/bin/false')
+            result = subprocess.run(['bash', str(Path(__file__).resolve().parents[1] / 'src/freeze-monitor')],
+                                    env=env, capture_output=True, text=True, timeout=40)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            state = Path(td) / 'freeze-monitor'
+            self.assertEqual((state / 'calls').read_text(), '5')
+            alerts = [line for line in (state / 'events.log').read_text().splitlines() if 'Docker anomaly' in line]
+        # One event when db turns unhealthy, none after the failed rounds while
+        # nothing changed, one when worker restarted across a failed round.
+        self.assertEqual(len(alerts), 2, alerts)
+        self.assertIn('db:', alerts[0])
+        self.assertNotIn('worker', alerts[0])
+        self.assertIn('worker:oom=false,restarts=2(new)', alerts[1])
+
+    def test_s1_read_time_parses_rfc3339nano_without_python_311(self):
+        # Literal epochs, independent of the parser: 2026-11-06T00:00:00Z = 1793923200.
+        for text, expected in [('2026-11-06T00:00:00.1234Z', 1793923200.1234),
+                               ('2026-11-06T00:00:00.123456789Z', 1793923200.123456),
+                               ('2026-11-06T00:00:00Z', 1793923200.0),
+                               ('2026-11-06T08:00:00.5+08:00', 1793923200.5)]:
+            with self.subTest(text=text):
+                self.assertAlmostEqual(probe.read_time({'read': text}, 0), expected, places=5)

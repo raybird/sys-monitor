@@ -342,10 +342,6 @@ class ReportPreviewTests(unittest.TestCase):
                 freeze_watch.STATE_DIR = old
                 app.window.destroy()
 
-
-if __name__ == "__main__":
-    unittest.main()
-
 @unittest.skipUnless(HAS_DISPLAY, 'no display available')
 class ContainerDetailWidgetTests(unittest.TestCase):
     def test_expander_retains_history_selection_and_bounds_width(self):
@@ -362,6 +358,23 @@ class ContainerDetailWidgetTests(unittest.TestCase):
         self.assertLess(app.container_list.measure(Gtk.Orientation.HORIZONTAL, -1)[0], 400)
         dropdown.set_selected(0)
         self.assertEqual(app.container_selections['abc'], '1')
+
+    def test_m1_restart_compares_with_the_latest_sample_that_has_a_count(self):
+        # 2026-11-06 使用者「都依照建議修」：一次查詢失敗不會讓新增的重啟失去比較對象。
+        Gtk.init()
+        app = freeze_watch.FreezeWatch(start_hidden=True)
+        app.container_list = Gtk.ListBox()
+        base = {'container': 'worker', 'container_id': 'abc', 'is_tracked_project': '1', 'process_status': 'ok',
+                'process_sample': '[]', 'container_state': 'running', 'sample_status': 'ok', 'cpu_pct': '1.0',
+                'memory_usage': '1MiB / 2MiB'}
+        history = [dict(base, timestamp='0', epoch='0', restart_count='1'),
+                   dict(base, timestamp='30', epoch='30', restart_count='NA', sample_status='unavailable_or_timeout'),
+                   dict(base, timestamp='60', epoch='60', restart_count='2')]
+        app._append_container_row(history[-1], history, [])
+        expander = app.container_list.get_first_child().get_child()
+        content = expander.get_label_widget()
+        detail = content.get_last_child()
+        self.assertTrue(detail.has_css_class('warm'))
 
     def test_n8_open_history_menu_is_detected_so_refresh_defers_rebuild(self):
         from gi.repository import GLib
@@ -392,3 +405,7 @@ class ContainerDetailWidgetTests(unittest.TestCase):
         pump()
         self.assertFalse(app._container_popup_open())
         window.destroy()
+
+
+if __name__ == "__main__":
+    unittest.main()

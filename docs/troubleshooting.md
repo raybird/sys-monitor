@@ -108,9 +108,24 @@ systemctl --user start freeze-watch.service
 
 ## Docker shows unavailable
 
-Docker is optional. If installed, the current user must be allowed to query it:
+Docker is optional. The dashboard and the metrics `docker_state` column name
+the reason (checked 2026-11-06):
+
+| State | Meaning | What to do |
+|---|---|---|
+| `unavailable:permission` | The Docker socket exists but this user may not open it | Grant access to the socket (see the warning below) |
+| `unavailable:no_socket` | No socket at the Docker context's or `DOCKER_HOST`'s path | Check that Docker is installed and which context is selected |
+| `unavailable:no_daemon` | The socket exists but nothing answers | Start the Docker daemon |
+| `unavailable:nonlocal` | The context or `DOCKER_HOST` is TCP or SSH | Not supported on purpose: host PIDs and RAM would describe another machine. Select a local context |
+| `unavailable:timeout` | Docker did not answer within the 6 s helper budget, or the 8 s outer limit stopped the helper | Usually a busy daemon; check `docker ps` response time |
+| `unavailable:helper_failed` | The sampling helper exited with an error | Run `python3 ~/.local/share/freeze-watch/container_probe.py now 0 "" "$(mktemp -d)"` to see the error |
+| `unavailable:error` | Another query error | As above |
+
+`docker ps` succeeding is not enough on its own: with a remote context it works
+while Freeze Watch reports `unavailable:nonlocal`. A local check is:
 
 ```bash
+docker context inspect --format '{{.Endpoints.docker.Host}}'
 docker ps
 ```
 

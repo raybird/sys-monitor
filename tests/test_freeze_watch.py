@@ -403,10 +403,6 @@ class SystemMetricLevelTests(unittest.TestCase):
         self.assertIn("原因未確認", summary)
         self.assertNotIn("凍結", summary)
 
-
-if __name__ == "__main__":
-    unittest.main()
-
 class ContainerEvidenceTests(unittest.TestCase):
     def test_snapshot_does_not_resurrect_stopped_containers(self):
         rows = [{'timestamp': 'a', 'container': 'worker'}, {'timestamp': 'b', 'container': '', 'sample_status': 'empty'}]
@@ -490,6 +486,11 @@ class ContainerReviewFollowupTests(unittest.TestCase):
         self.assertEqual(css, 'unknown')
         self.assertIn('CPU 未知', text)
 
+    def test_n3_detail_has_no_percent_after_unknown_cpu(self):
+        text = freeze_watch.container_detail({'cpu_pct': 'NA'}, [])
+        self.assertIn('CPU：未知（', text)
+        self.assertNotIn('未知%', text)
+
     def test_s4_docker_state_shows_the_reason(self):
         self.assertEqual(freeze_watch.docker_state_label('ok'), 'ok')
         self.assertEqual(freeze_watch.docker_state_label('unavailable:permission'), '不可用（Docker socket 權限不足）')
@@ -512,6 +513,9 @@ class ContainerReviewFollowupTests(unittest.TestCase):
             path = Path(td) / 'docker.tsv'
             self.write_docker_file(path, 20_000)
             self.assertGreater(path.stat().st_size, 8_000_000)
+            # Control: the earlier approach, the file tail filtered by epoch, finds nothing.
+            tail = freeze_watch.read_tsv_path(path, freeze_watch.DOCKER_FIELDS, 200_000)
+            self.assertEqual([row for row in tail if int(row['epoch']) <= 2500], [])
             rows = freeze_watch.read_tsv_before(path, freeze_watch.DOCKER_FIELDS, 1000 + 1500, 200_000)
             self.assertEqual(rows[-1]['epoch'], '2500')
             self.assertLess(len(rows), 1501)
@@ -532,3 +536,7 @@ class ContainerReviewFollowupTests(unittest.TestCase):
             rows = freeze_watch.read_tsv_path(path, freeze_watch.DOCKER_FIELDS, len(data) - cut)
         self.assertEqual(rows[0]['timestamp'], 't11')
         self.assertEqual(len(rows), 39)
+
+
+if __name__ == "__main__":
+    unittest.main()

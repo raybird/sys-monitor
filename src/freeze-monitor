@@ -301,19 +301,32 @@ record_docker_sample() {
     fi
 
 
-    # Only tracked projects alert. A restart counts when the same container ID
-    # restarted since the previous sample, so an old count never alerts again;
-    # D shares the host WARN threshold and stays out of the text by value, so
-    # a fluctuating count does not log the same anomaly on every sample.
+    # A round without Docker data says nothing new: keep the recorded anomaly
+    # and the restart baselines, so neither repeats nor loses an event.
+    if [[ "${docker_state}" == unavailable* ]]; then
+        return 0
+    fi
+
+    # Only tracked projects alert. A restart counts when the restart count is
+    # above the latest valid sample of the same container ID, the baseline the
+    # dashboard uses too; a failed query for one container keeps its baseline.
+    # D and Z share the event text as flags, not counts, so a fluctuating
+    # count does not log the same anomaly on every sample.
     alert="$(awk -F '\t' -v prev="${last_restart_counts}" -v dwarn="${warn_dstate_count}" '
-        BEGIN { n = split(prev, pairs, ";"); for (i = 1; i <= n; i++) if (split(pairs[i], kv, "=") == 2) last[kv[1]] = kv[2] }
+        BEGIN { n = split(prev, pairs, ";"); for (i = 1; i <= n; i++) if (split(pairs[i], kv, "=") == 2) { split(kv[2], ce, "@"); last[kv[1]] = ce[1] } }
         $3 != "" && $4 == "1" {
             restarted = ($12 in last) && $11 ~ /^[0-9]+$/ && $11 + 0 > last[$12] + 0
             deep = $20 ~ /^[0-9]+$/ && $20 + 0 >= dwarn
             if ($10 == "true" || $15 == "unhealthy" || $9 + 0 > 0 || restarted || deep)
-                printf "%s:oom=%s,restarts=%s%s,Z=%s,D>=%s=%s,health=%s;", $3, $10, $11, restarted ? "(new)" : "", $9, dwarn, deep ? "yes" : "no", $15
+                printf "%s:oom=%s,restarts=%s%s,Z>0=%s,D>=%s=%s,health=%s;", $3, $10, $11, restarted ? "(new)" : "", ($9 + 0 > 0 ? "yes" : "no"), dwarn, deep ? "yes" : "no", $15
         }' <<< "${rows:-}")"
-    last_restart_counts="$(awk -F '\t' '$12 != "" && $12 != "NA" && $11 ~ /^[0-9]+$/ { printf "%s=%s;", $12, $11 }' <<< "${rows:-}")"
+    # id=count@epoch; entries not refreshed for a day belong to removed
+    # containers and are dropped so the table stays bounded.
+    last_restart_counts="$(awk -F '\t' -v prev="${last_restart_counts}" -v now="${epoch}" '
+        BEGIN { n = split(prev, pairs, ";"); for (i = 1; i <= n; i++) if (split(pairs[i], kv, "=") == 2) seen[kv[1]] = kv[2] }
+        $12 != "" && $12 != "NA" && $11 ~ /^[0-9]+$/ { seen[$12] = $11 "@" now }
+        END { for (id in seen) { split(seen[id], ce, "@"); if (now - ce[2] <= 86400) printf "%s=%s;", id, seen[id] } }
+    ' <<< "${rows:-}")"
     if [[ -n "${alert}" && "${alert}" != "${last_docker_alert}" ]]; then
         printf '%s\tWARN\tDocker anomaly: %s\n' "${timestamp}" "${alert}" >> "${event_log}"
     fi
