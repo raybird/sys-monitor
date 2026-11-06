@@ -132,6 +132,58 @@ def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_00
         byte_limit *= 4
 
 
+def read_tsv_before(path: Path | None, fields: list[str], end_epoch: int,
+                    byte_limit: int = 2_000_000) -> list[dict[str, str]]:
+    """Rows at or before end_epoch, wherever in the file they are.
+
+    An incident early in a day's file sits far from the tail, so reading the
+    last bytes and filtering would find nothing although the rows are on disk.
+    Rows are appended in epoch order, so the cut point can be searched for.
+    """
+    if path is None:
+        return []
+    try:
+        with path.open("rb") as handle:
+            size = handle.seek(0, os.SEEK_END)
+
+            def epoch_after(offset: int) -> tuple[int, int | None]:
+                """The first whole line starting after offset and its epoch."""
+                handle.seek(offset)
+                if offset:
+                    handle.readline()
+                start = handle.tell()
+                line = handle.readline()
+                parts = line.split(b"\t", 2)
+                try:
+                    return start, int(parts[1])
+                except (IndexError, ValueError):
+                    # The header, or the end of the file.
+                    return start, None if line else size + 1
+
+            low, high = 0, size
+            while low < high:
+                middle = (low + high) // 2
+                _, epoch = epoch_after(middle)
+                if epoch is not None and epoch > end_epoch:
+                    high = middle
+                else:
+                    low = middle + 1
+            cut, _ = epoch_after(low)
+            handle.seek(max(0, cut - byte_limit))
+            data = handle.read(cut - max(0, cut - byte_limit))
+            if cut > byte_limit:
+                data = data[data.find(b"\n") + 1:]
+    except OSError:
+        return []
+    lines = data.decode("utf-8", errors="replace").splitlines()
+    rows = csv.DictReader(lines, fieldnames=fields, delimiter="\t", restval="NA")
+    return [
+        row for row in rows
+        if row.get("timestamp") and row["timestamp"] != "timestamp"
+        and (as_int(row.get("epoch")) or 0) <= end_epoch
+    ]
+
+
 def read_tsv_tail(pattern: str, fields: list[str]) -> list[dict[str, str]]:
     return read_tsv_path(newest_file(pattern), fields, min_rows=HISTORY_ROWS)
 
@@ -853,6 +905,56 @@ def container_warning(row: dict[str, str], previous: dict[str, str] | None = Non
             or (as_int(row.get('zombies')) or 0) > 0 or (as_int(row.get('dstate')) or 0) >= 4)
 
 
+DOCKER_UNAVAILABLE_REASONS = {
+    "permission": "Docker socket 權限不足",
+    "no_socket": "找不到 Docker socket",
+    "no_daemon": "Docker 未執行",
+    "nonlocal": "非本機 Docker endpoint",
+    "timeout": "查詢逾時",
+    "helper_failed": "採樣程式失敗",
+    "error": "查詢失敗",
+}
+
+
+def docker_state_label(state: str) -> str:
+    """The collector's Docker state with the recorded reason spelled out."""
+    if state != "unavailable" and not state.startswith("unavailable:"):
+        return state
+    reason = state.partition(":")[2]
+    if not reason:
+        return "不可用（原因未記錄）"
+    return f"不可用（{DOCKER_UNAVAILABLE_REASONS.get(reason, reason)}）"
+
+
+CONTAINER_SAMPLE_GAPS = {
+    "unavailable_or_timeout": "查詢逾時或失敗",
+    "stopped": "已停止，無即時負載",
+    "unavailable": "Docker 不可用",
+}
+
+
+def container_summary(row: dict[str, str], previous: dict[str, str] | None = None) -> tuple[str, str]:
+    """The one-line text and style of a container in the list.
+
+    Missing figures must not look like a healthy container, so a row without
+    a complete live sample gets its own style; a known anomaly still wins.
+    """
+    state = row.get("container_state") or "未知"
+    status = row.get("sample_status")
+    cpu = as_float(row.get("cpu_pct"))
+    memory = (row.get("memory_usage") or "NA").split(" / ")[0]
+    if status in CONTAINER_SAMPLE_GAPS:
+        text = f"{state} · 未知（{CONTAINER_SAMPLE_GAPS[status]}）"
+    else:
+        cpu_text = "CPU 未知" if cpu is None else f"{cpu:.1f}%"
+        memory_text = "記憶體未知" if memory in ("", "NA") else memory
+        text = f"{state} · {cpu_text} · {memory_text}"
+    complete = status == "ok" and cpu is not None and memory not in ("", "NA")
+    if container_warning(row, previous):
+        return text, "warm"
+    return text, "muted" if complete else "unknown"
+
+
 def container_signature(rows: list[dict[str, str]]) -> tuple:
     """Everything a container row renders, and nothing else.
 
@@ -1122,6 +1224,7 @@ class FreezeWatch(Gtk.Application):
             .data-list row label.warm { color: #d8c568; }
             .data-list row label.hot { color: #f0a046; }
             .data-list row label.danger { color: #ef6861; }
+            .data-list row label.unknown { color: #b4a7e0; font-style: italic; }
             .safe { color: #79c4d3; } .warm { color: #d8c568; }
             .hot { color: #f0a046; } .danger { color: #ef6861; }
             .status-pill { font-size: 12px; font-weight: 700; }
@@ -1395,6 +1498,19 @@ class FreezeWatch(Gtk.Application):
         while child := list_box.get_first_child():
             list_box.remove(child)
 
+    def _container_popup_open(self) -> bool:
+        def descendants(widget):
+            child = widget.get_first_child()
+            while child:
+                yield child
+                yield from descendants(child)
+                child = child.get_next_sibling()
+
+        return self.container_list is not None and any(
+            isinstance(widget, Gtk.Popover) and widget.get_visible()
+            for widget in descendants(self.container_list)
+        )
+
     def _append_container_row(self, row: dict[str, str], history=None, metrics=None, expanded=False) -> None:
         if self.container_list is None:
             return
@@ -1408,10 +1524,8 @@ class FreezeWatch(Gtk.Application):
         content = Gtk.Box(spacing=10)
         name = self._label(row.get("container", "unknown"), None, ellipsize=True)
         name.set_hexpand(True)
-        cpu_value = as_float(row.get("cpu_pct"))
-        cpu = "未知" if cpu_value is None else f"{cpu_value:.1f}"
-        memory = row.get("memory_usage", "—").split(" / ")[0]
-        detail_label = self._label(f"{row.get('container_state', '未知')} · {cpu}% · {memory}", "warm" if container_warning(row, history[-2] if len(history) > 1 else None) else "muted", 1, ellipsize=True)
+        summary, style = container_summary(row, history[-2] if len(history) > 1 else None)
+        detail_label = self._label(summary, style, 1, ellipsize=True)
         content.append(name)
         content.append(detail_label)
         expander.set_label_widget(content)
@@ -1441,7 +1555,7 @@ class FreezeWatch(Gtk.Application):
 
         dropdown.connect("notify::selected", select_sample)
         expander.set_child(box)
-        container_row.set_tooltip_text("警示條件（僅追蹤中的專案）：OOM、不健康、較前一次採樣新增重啟、Z 大於 0，或 D 達 4。未知不視為正常；展開查看採樣時間與原因。")
+        container_row.set_tooltip_text("警示條件（僅追蹤中的專案）：OOM、不健康、較前一次採樣新增重啟、Z 大於 0，或 D 達 4。未知不視為正常，資料不完整的列以紫色斜體顯示；展開查看採樣時間與原因。")
         container_row.set_child(expander)
         self.container_list.append(container_row)
 
@@ -1710,9 +1824,8 @@ class FreezeWatch(Gtk.Application):
         self._set_level_class(self.labels["hero_temp"], level)
         self._set_level_class(self.labels["hero_status"], level)
 
-        docker_state = latest_metric.get("docker_state", "—")
+        docker_state = docker_state_label(latest_metric.get("docker_state", "—"))
         container_count = latest_metric.get("docker_containers", "—")
-        self.labels["hero_docker"].set_text(f"DOCKER  {container_count} 容器 · {docker_state}")
         available_kib = as_int(latest_metric.get("mem_available_kib"))
         self.labels["hero_memory"].set_text(f"可用記憶體 {format_gib(available_kib)}")
 
@@ -1808,14 +1921,12 @@ class FreezeWatch(Gtk.Application):
         if reviewing:
             # The collector names both files from the same stamp, so the
             # container sample beside an incident is one substitution away.
-            docker_rows = read_tsv_path(
-                docker_path_for(self.selected_incident.metrics_path), DOCKER_FIELDS, 2_000_000
-            )
+            docker_path = docker_path_for(self.selected_incident.metrics_path)
             end = incident_end(self.selected_incident)
-            if end is not None:
-                docker_rows = [
-                    row for row in docker_rows if (as_int(row.get("epoch")) or 0) <= end
-                ]
+            docker_rows = (
+                read_tsv_path(docker_path, DOCKER_FIELDS, 2_000_000) if end is None
+                else read_tsv_before(docker_path, DOCKER_FIELDS, end)
+            )
         else:
             docker_rows = read_tsv_path(newest_file("docker-*.tsv"), DOCKER_FIELDS, 2_000_000)
         current_containers = latest_containers(docker_rows)
@@ -1848,9 +1959,12 @@ class FreezeWatch(Gtk.Application):
             latest_metric.get("top_memory_processes", ""),
         )
 
+        # Rebuilding destroys an open history menu under the pointer; the
+        # signature stays stale, so the rebuild happens once the menu closes.
         rebuild_containers = (
             self.container_list is not None
             and containers != self.container_signature
+            and not self._container_popup_open()
         )
         rebuild_events = (
             self.event_list is not None and event_signature != self.event_signature

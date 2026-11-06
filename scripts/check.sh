@@ -2,6 +2,10 @@
 
 set -euo pipefail
 
+# The collector runs below would otherwise query this machine's real Docker
+# daemon, making the result depend on what happens to be running here.
+export DOCKER_HOST=unix:///nonexistent
+
 repo_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 readonly repo_dir
 test_root=""

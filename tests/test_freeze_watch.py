@@ -459,3 +459,76 @@ class ContainerBackwardCompatibilityTests(unittest.TestCase):
         self.assertFalse(freeze_watch.container_warning(row, {'restart_count': '2'}))
         self.assertFalse(freeze_watch.container_warning(row, {'restart_count': 'NA'}))
         self.assertTrue(freeze_watch.container_warning(row, {'restart_count': '1'}))
+
+
+class ContainerReviewFollowupTests(unittest.TestCase):
+    """2026-11-06 使用者「2. 一起修」：PR #3 審查的 S4、S5、S6、S9、N1。"""
+
+    def test_s9_helper_fields_match_dashboard_fields(self):
+        spec = importlib.util.spec_from_file_location("container_probe", REPO_ROOT / "src" / "container_probe.py")
+        probe = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(probe)
+        self.assertEqual(probe.FIELDS, freeze_watch.DOCKER_FIELDS)
+
+    def test_s5_unknown_rows_look_different_from_normal_rows(self):
+        normal = {'is_tracked_project': '1', 'container_state': 'running', 'sample_status': 'ok',
+                  'cpu_pct': '12.0', 'memory_usage': '300MiB / 2GiB'}
+        self.assertEqual(freeze_watch.container_summary(normal), ('running · 12.0% · 300MiB', 'muted'))
+        timed_out = dict(normal, sample_status='unavailable_or_timeout', cpu_pct='NA', memory_usage='NA')
+        text, css = freeze_watch.container_summary(timed_out)
+        self.assertEqual(css, 'unknown')
+        self.assertIn('查詢逾時或失敗', text)
+        self.assertNotIn('NA', text)
+        stopped = dict(normal, container_state='exited', sample_status='stopped', cpu_pct='NA', memory_usage='NA')
+        text, css = freeze_watch.container_summary(stopped)
+        self.assertEqual(css, 'unknown')
+        self.assertIn('已停止', text)
+        # A known anomaly still wins over missing load figures.
+        self.assertEqual(freeze_watch.container_summary(dict(stopped, oom_killed='true'))[1], 'warm')
+        # Running with one figure missing is still unknown, not normal.
+        text, css = freeze_watch.container_summary(dict(normal, cpu_pct='NA'))
+        self.assertEqual(css, 'unknown')
+        self.assertIn('CPU 未知', text)
+
+    def test_s4_docker_state_shows_the_reason(self):
+        self.assertEqual(freeze_watch.docker_state_label('ok'), 'ok')
+        self.assertEqual(freeze_watch.docker_state_label('unavailable:permission'), '不可用（Docker socket 權限不足）')
+        self.assertEqual(freeze_watch.docker_state_label('unavailable:timeout'), '不可用（查詢逾時）')
+        self.assertEqual(freeze_watch.docker_state_label('unavailable'), '不可用（原因未記錄）')
+        self.assertEqual(freeze_watch.docker_state_label('unavailable:something_new'), '不可用（something_new）')
+
+    def write_docker_file(self, path: Path, rows: int) -> None:
+        sample = json.dumps([{'pid': '1', 'state': 'S', 'cpu': 1.0, 'memory': 1.0, 'name': 'x' * 40}] * 8)
+        with path.open('w') as handle:
+            handle.write('\t'.join(freeze_watch.DOCKER_FIELDS) + '\n')
+            for n in range(rows):
+                values = dict.fromkeys(freeze_watch.DOCKER_FIELDS, 'NA')
+                values.update(timestamp=f't{n}', epoch=str(1000 + n), container='worker',
+                              process_sample='"' + sample.replace('"', '""') + '"')
+                handle.write('\t'.join(values[key] for key in freeze_watch.DOCKER_FIELDS) + '\n')
+
+    def test_s6_incident_review_finds_rows_before_the_end_anywhere_in_the_file(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'docker.tsv'
+            self.write_docker_file(path, 20_000)
+            self.assertGreater(path.stat().st_size, 8_000_000)
+            rows = freeze_watch.read_tsv_before(path, freeze_watch.DOCKER_FIELDS, 1000 + 1500, 200_000)
+            self.assertEqual(rows[-1]['epoch'], '2500')
+            self.assertLess(len(rows), 1501)
+            self.assertGreater(len(rows), 100)
+            self.assertEqual(int(rows[-1]['epoch']) - int(rows[0]['epoch']), len(rows) - 1)
+            # Before the first sample nothing is returned; past the last, the tail.
+            self.assertEqual(freeze_watch.read_tsv_before(path, freeze_watch.DOCKER_FIELDS, 999, 200_000), [])
+            self.assertEqual(freeze_watch.read_tsv_before(path, freeze_watch.DOCKER_FIELDS, 10**9, 200_000)[-1]['epoch'], str(1000 + 19_999))
+
+    def test_n1_a_cut_inside_a_quoted_field_does_not_swallow_the_next_row(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / 'docker.tsv'
+            self.write_docker_file(path, 50)
+            data = path.read_bytes()
+            # Cut in the middle of row t10's quoted JSON field; t10 is partial.
+            row_starts = [i + 1 for i, byte in enumerate(data) if byte == 0x0A][:-1]
+            cut = row_starts[10] + data[row_starts[10]:].index(b'"') + 20
+            rows = freeze_watch.read_tsv_path(path, freeze_watch.DOCKER_FIELDS, len(data) - cut)
+        self.assertEqual(rows[0]['timestamp'], 't11')
+        self.assertEqual(len(rows), 39)

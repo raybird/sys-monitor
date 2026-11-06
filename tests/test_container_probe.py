@@ -1,6 +1,7 @@
 """Raw Docker samples: boundaries that would otherwise create false evidence."""
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import time
@@ -49,7 +50,8 @@ class SamplingTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             with patch.object(probe, 'endpoint', side_effect=OSError('denied')):
                 state, rows = probe.collect('2026-11-06T00:00:00Z', 100, 'a,b', Path(td))
-        self.assertEqual(state, 'unavailable')
+        # S4 (2026-11-06): the state names the reason; an unclassified error says so.
+        self.assertEqual(state, 'unavailable:error')
         self.assertEqual(rows[0]['container'], '')
         self.assertEqual(rows[0]['sample_status'], 'unavailable')
 
@@ -80,7 +82,7 @@ class SamplingTests(unittest.TestCase):
         with self.assertRaises(TimeoutError):
             engine.get('/containers/json')
 
-class CollectorIntegrationTests(unittest.TestCase):
+class CollectorHarness(unittest.TestCase):
     def run_collector(self, root, body):
         import os
         import subprocess
@@ -94,6 +96,8 @@ class CollectorIntegrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         return Path(root) / 'freeze-monitor'
 
+
+class CollectorIntegrationTests(CollectorHarness):
     def test_real_shell_writes_compatible_rows_and_anomaly(self):
         import csv
         row = dict.fromkeys(probe.FIELDS, 'NA')
@@ -227,7 +231,7 @@ class FailureAndLimitTests(unittest.TestCase):
         record = next(csv.DictReader(output.getvalue().splitlines()[1:], fieldnames=probe.FIELDS, delimiter='\t'))
         self.assertEqual(json.loads(record['process_sample'])[0]['name'], '程式')
 
-class HardTimeoutTest(CollectorIntegrationTests):
+class HardTimeoutTest(CollectorHarness):
     def test_hung_helper_has_hard_limit_and_host_survives(self):
         started = time.monotonic()
         with tempfile.TemporaryDirectory() as td:
@@ -336,3 +340,161 @@ class MixedRotationRegressionTests(unittest.TestCase):
                 self.assertEqual(sum(r['container_state']=='running' for r in rows),8)
                 self.assertTrue(all(r['oom_killed']=='true' for r in rows if r['container_state']=='exited'))
         self.assertEqual(inspected,set(range(64)))
+
+
+class ReviewFollowupTests(CollectorHarness):
+    """2026-11-06 使用者「2. 一起修」：PR #3 審查的 S2、S4、S8、N2、N3、N4。"""
+
+    class Timed(RecoveryRegressionTests.EngineFixture):
+        def __init__(self, read_time, **kw):
+            super().__init__(**kw)
+            self.read_time = read_time
+
+        def get(self, path):
+            result = super().get(path)
+            if '/stats?' in path:
+                result['read'] = self.read_time
+            return result
+
+    def sample(self, td, engine, epoch):
+        with patch.object(probe, 'endpoint', return_value='/unused'), patch.object(probe, 'Engine', return_value=engine):
+            return probe.collect('then', epoch, 'tracked', Path(td))
+
+    def test_s2_rates_divide_by_each_containers_read_time(self):
+        # The loop started 30 s apart, but Docker read the counters 10 s apart.
+        with tempfile.TemporaryDirectory() as td:
+            self.sample(td, self.Timed('2026-11-06T00:00:00.500000000Z', read=100), 100)
+            _, rows = self.sample(td, self.Timed('2026-11-06T00:00:10.500000000Z', read=1100), 130)
+        self.assertEqual(rows[0]['read_bps'], 100.0)
+
+    def test_s2_unusable_read_time_falls_back_to_loop_epoch(self):
+        with tempfile.TemporaryDirectory() as td:
+            self.sample(td, self.Timed('0001-01-01T00:00:00Z', read=100), 100)
+            _, rows = self.sample(td, self.Timed('garbage', read=700), 130)
+        self.assertEqual(rows[0]['read_bps'], 20.0)
+
+    def test_n2_rates_and_cpu_are_rounded(self):
+        with tempfile.TemporaryDirectory() as td:
+            self.sample(td, self.Timed('2026-11-06T00:00:00Z', read=100, cpu=1000, system=10000), 100)
+            _, rows = self.sample(td, self.Timed('2026-11-06T00:00:03Z', read=1100, cpu=1001, system=10003), 130)
+        self.assertEqual(rows[0]['read_bps'], 333.3)
+        self.assertEqual(rows[0]['cpu_pct'], 66.67)
+
+    def test_s4_unavailable_state_names_the_reason(self):
+        import socket as socket_module
+        with tempfile.TemporaryDirectory() as td:
+            cases = {'unavailable:no_socket': 'unix://' + td + '/missing.sock',
+                     'unavailable:nonlocal': 'tcp://remote:2375'}
+            locked = td + '/locked.sock'
+            server = socket_module.socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM)
+            server.bind(locked)
+            server.listen(1)
+            os.chmod(locked, 0)
+            if os.geteuid() != 0:
+                cases['unavailable:permission'] = 'unix://' + locked
+            refused = td + '/refused.sock'
+            closed = socket_module.socket(socket_module.AF_UNIX, socket_module.SOCK_STREAM)
+            closed.bind(refused)
+            closed.close()
+            cases['unavailable:no_daemon'] = 'unix://' + refused
+            try:
+                for expected, host in cases.items():
+                    with self.subTest(host=host), patch.dict('os.environ', {'DOCKER_HOST': host}):
+                        state, rows = probe.collect('now', 100, 'a', Path(td))
+                        self.assertEqual(state, expected)
+                        self.assertEqual(rows[0]['sample_status'], 'unavailable')
+            finally:
+                server.close()
+
+    def test_s8_slow_daemon_is_cut_at_budget_and_keeps_finished_rows(self):
+        import subprocess
+        import sys
+        script = f"""
+import importlib.util, json, socket, threading, time
+from pathlib import Path
+import tempfile
+spec = importlib.util.spec_from_file_location('probe', {str(Path(__file__).resolve().parents[1] / 'src/container_probe.py')!r})
+probe = importlib.util.module_from_spec(spec); spec.loader.exec_module(probe)
+probe.BUDGET_SECONDS = 1.5
+td = tempfile.mkdtemp()
+path = td + '/docker.sock'
+server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); server.bind(path); server.listen(16)
+listing = [dict(Id=i, State='exited', Names=['/' + i], Labels={{'com.docker.compose.project': 'tracked'}}) for i in ('a1', 'b2')]
+def reply(conn, body, drip=False):
+    head = b'HTTP/1.1 200 OK\\r\\nContent-Type: application/json\\r\\nContent-Length: ' + str(len(body)).encode() + b'\\r\\n\\r\\n'
+    conn.sendall(head)
+    for i in range(len(body)):
+        if drip:
+            time.sleep(0.2)
+        conn.sendall(body[i:i + (1 if drip else len(body))])
+        if not drip:
+            break
+def serve():
+    while True:
+        conn, _ = server.accept()
+        request = conn.recv(4096).decode()
+        target = request.split()[1]
+        try:
+            if target.startswith('/containers/json'):
+                reply(conn, json.dumps(listing).encode())
+            elif '/a1/' in target:
+                reply(conn, json.dumps(dict(State=dict(Status='exited', OOMKilled=True), RestartCount=1)).encode())
+            else:
+                reply(conn, b' ' * 400 + b'{{}}', drip=True)
+        except OSError:
+            pass
+        conn.close()
+threading.Thread(target=serve, daemon=True).start()
+import os
+os.environ['DOCKER_HOST'] = 'unix://' + path
+started = time.monotonic()
+state, rows = probe.collect('now', 100, 'tracked', Path(td))
+print(json.dumps(dict(elapsed=time.monotonic() - started, state=state,
+                      rows=[[r['container'], r['sample_status'], r['oom_killed']] for r in rows])))
+"""
+        try:
+            result = subprocess.run([sys.executable, '-c', script], capture_output=True, text=True, timeout=8)
+        except subprocess.TimeoutExpired:
+            self.fail('helper did not stop at its budget')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads(result.stdout)
+        self.assertLess(report['elapsed'], 2.5)
+        self.assertEqual(report['state'], 'partial')
+        self.assertEqual(report['rows'], [['a1', 'stopped', 'true'], ['b2', 'unavailable_or_timeout', None]])
+
+    def test_n3_deep_rotation_reaches_every_tracked_container(self):
+        # A 20 s host interval gives a 60 s Docker period: epoch // 30 then
+        # advances by two buckets and the old offset repeated forever.
+        seen = set()
+        class Sixteen:
+            def get(self, path):
+                if path == '/containers/json?all=1':
+                    return [{'Id': f'{n:02}', 'State': 'running', 'Names': [f'/w{n}'],
+                             'Labels': {'com.docker.compose.project': 'tracked'}} for n in range(16)]
+                if path.endswith('/json'):
+                    return {'State': {'StartedAt': 'start', 'Status': 'running'}}
+                if '/stats?' in path:
+                    return {}
+                seen.add(path.split('/')[2])
+                return {'Titles': ['PID', 'STAT', '%CPU', '%MEM', 'COMMAND'], 'Processes': []}
+        with tempfile.TemporaryDirectory() as td, patch.object(probe, 'endpoint', return_value='/unused'), \
+                patch.object(probe, 'Engine', return_value=Sixteen()):
+            for epoch in (0, 60):
+                probe.collect('now', epoch, 'tracked', Path(td))
+        self.assertEqual(len(seen), 16)
+
+    def test_n4_helper_and_shell_write_the_same_unavailable_row(self):
+        import csv
+        import io
+        output = io.StringIO()
+        with tempfile.TemporaryDirectory() as td, patch.dict('os.environ', {'DOCKER_HOST': 'unix://' + td + '/missing.sock'}), \
+                patch('sys.argv', ['probe', 'now', '100', 'a', td]), patch('sys.stdout', output):
+            probe.main()
+        helper_row = next(csv.DictReader(output.getvalue().splitlines()[1:], fieldnames=probe.FIELDS, delimiter='\t'))
+        with tempfile.TemporaryDirectory() as td:
+            state = self.run_collector(td, 'raise SystemExit(1)\n')
+            shell_row = next(csv.DictReader(next(state.glob('docker-*.tsv')).read_text().splitlines(), delimiter='\t'))
+        for key in ('timestamp', 'epoch'):
+            helper_row.pop(key)
+            shell_row.pop(key)
+        self.assertEqual(helper_row, shell_row)

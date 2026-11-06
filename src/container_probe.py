@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import csv
+from datetime import datetime
 import http.client
 import json
 import os
 from pathlib import Path
+import re
+import signal
 import socket
 import subprocess
 import sys
@@ -34,6 +37,10 @@ class Engine:
         if remaining <= 0:
             raise TimeoutError('budget')
         connection = http.client.HTTPConnection('localhost', timeout=min(0.5, remaining))
+        # Socket timeouts apply per operation, so a daemon that trickles bytes
+        # would never trip them. The alarm bounds the request as a whole.
+        previous = signal.signal(signal.SIGALRM, _budget_expired)
+        signal.setitimer(signal.ITIMER_REAL, remaining)
         try:
             connection.sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
             connection.sock.settimeout(min(0.5, remaining))
@@ -47,7 +54,38 @@ class Engine:
                 raise ValueError('response_limit')
             return json.loads(payload)
         finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous)
             connection.close()
+
+
+def _budget_expired(_signum, _frame):
+    raise TimeoutError('budget')
+
+
+def unavailable_reason(error: BaseException) -> str:
+    if isinstance(error, TimeoutError):
+        return 'timeout'
+    if isinstance(error, FileNotFoundError):
+        return 'no_socket'
+    if isinstance(error, PermissionError):
+        return 'permission'
+    if isinstance(error, ConnectionRefusedError):
+        return 'no_daemon'
+    if str(error) == 'nonlocal_endpoint':
+        return 'nonlocal'
+    return 'error'
+
+
+def read_time(stats: dict, fallback: float) -> float:
+    """When Docker read the counters; the loop start only if that is unusable."""
+    try:
+        # Docker reports nanoseconds; older Pythons parse at most microseconds.
+        value = datetime.fromisoformat(re.sub(r'(\.\d{6})\d+', r'\1', stats['read'])).timestamp()
+    except (KeyError, TypeError, ValueError):
+        return fallback
+    # A stopped container reports year 1, which is no sample time at all.
+    return value if value > 946_684_800 else fallback
 
 
 def endpoint() -> str:
@@ -119,7 +157,7 @@ def invalidate_cache(path: Path) -> None:
         pass
 
 
-def cpu_percent(previous: dict, stats: dict, started: str, epoch: int) -> float | None:
+def cpu_percent(previous: dict, stats: dict, started: str, epoch: float) -> float | None:
     cpu_stats = stats.get('cpu_stats', {})
     cpu = cpu_stats.get('cpu_usage', {}).get('total_usage')
     system = cpu_stats.get('system_cpu_usage')
@@ -138,16 +176,18 @@ def cpu_percent(previous: dict, stats: dict, started: str, epoch: int) -> float 
 def collect(timestamp: str, epoch: int, projects: str, state_dir: Path) -> tuple[str, list[dict]]:
     deadline = time.monotonic() + BUDGET_SECONDS
     empty = dict.fromkeys(FIELDS)
-    empty.update(timestamp=timestamp, epoch=epoch, container='', sample_status='unavailable')
+    # Same values as the collector's own empty row when the helper fails.
+    empty.update(timestamp=timestamp, epoch=epoch, container='', is_tracked_project=0,
+                 sample_status='unavailable', process_status='unavailable')
     cache_path = state_dir / 'docker-counters.json'
     try:
         engine = Engine(endpoint(), deadline)
         containers = engine.get('/containers/json?all=1')
         if not isinstance(containers, list):
             raise ValueError('invalid_listing')
-    except (OSError, ValueError, subprocess.SubprocessError):
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
         invalidate_cache(cache_path)
-        return 'unavailable', [empty]
+        return 'unavailable:' + unavailable_reason(error), [empty]
     try:
         cache = json.loads(cache_path.read_text())
         if not isinstance(cache, dict):
@@ -159,7 +199,12 @@ def collect(timestamp: str, epoch: int, projects: str, state_dir: Path) -> tuple
                   or (c.get('Labels') or {}).get('com.docker.compose.project') in wanted]
     tracked = sorted(c['Id'] for c in containers if c.get('State') == 'running'
                      and (c.get('Labels') or {}).get('com.docker.compose.project') in wanted)
-    offset = (epoch // 30 * MAX_DEEP) % max(1, len(tracked))
+    # A persistent cursor, like the overview one below: a time bucket repeats
+    # the same offset whenever the sampling period is a multiple of it.
+    deep_cursor = cache.get('__deep_cursor', 0)
+    if not isinstance(deep_cursor, int):
+        deep_cursor = 0
+    offset = deep_cursor % max(1, len(tracked))
     deep = set((tracked + tracked)[offset:offset + min(MAX_DEEP, len(tracked))])
     # Advance through the entire sorted list, skipping only deep candidates
     # already selected. Truncating a separately rotated list can starve its tail.
@@ -178,7 +223,8 @@ def collect(timestamp: str, epoch: int, projects: str, state_dir: Path) -> tuple
         if len(ordered) >= MAX_CONTAINERS:
             break
     rows = []
-    counters = {'__overview_cursor': next_cursor}
+    counters = {'__overview_cursor': next_cursor,
+                '__deep_cursor': (offset + MAX_DEEP) % max(1, len(tracked))}
     partial = len(containers) > MAX_CONTAINERS
     for container in ordered:
         identity = container['Id']
@@ -206,16 +252,19 @@ def collect(timestamp: str, epoch: int, projects: str, state_dir: Path) -> tuple
             if not isinstance(previous, dict) or previous.get('id') != identity:
                 previous = {}
             read, write = block_bytes(stats)
-            read_bps, write_bps = io_rates(previous, identity, started, epoch, read, write)
+            at = read_time(stats, epoch)
+            read_bps, write_bps = io_rates(previous, identity, started, at, read, write)
             cpu_stats = stats.get('cpu_stats', {})
             cpu = cpu_stats.get('cpu_usage', {}).get('total_usage')
             system = cpu_stats.get('system_cpu_usage')
-            cpu_pct = cpu_percent(previous, stats, started, epoch)
+            cpu_pct = cpu_percent(previous, stats, started, at)
             memory = stats.get('memory_stats', {})
             usage, limit = memory.get('usage'), memory.get('limit')
-            row.update(cpu_pct=cpu_pct, memory_usage=f'{usage / 1048576:.1f}MiB / {limit / 1048576:.1f}MiB' if usage is not None and limit else None,
-                       tasks=stats.get('pids_stats', {}).get('current'), read_bytes=read, write_bytes=write, read_bps=read_bps, write_bps=write_bps)
-            counters[identity] = dict(id=identity, started=started, epoch=epoch, read=read, write=write,
+            row.update(cpu_pct=None if cpu_pct is None else round(cpu_pct, 2), memory_usage=f'{usage / 1048576:.1f}MiB / {limit / 1048576:.1f}MiB' if usage is not None and limit else None,
+                       tasks=stats.get('pids_stats', {}).get('current'), read_bytes=read, write_bytes=write,
+                       read_bps=None if read_bps is None else round(read_bps, 1),
+                       write_bps=None if write_bps is None else round(write_bps, 1))
+            counters[identity] = dict(id=identity, started=started, epoch=at, read=read, write=write,
                                       cpu=cpu, system=system)
             if identity in deep:
                 try:
@@ -242,7 +291,7 @@ def collect(timestamp: str, epoch: int, projects: str, state_dir: Path) -> tuple
             row.update(cpu_pct=None, read_bps=None, write_bps=None)
         partial = True
     if not rows:
-        empty['sample_status'] = 'empty'
+        empty.update(sample_status='empty', process_status='empty')
         rows = [empty]
     return 'partial' if partial else 'ok', rows
 

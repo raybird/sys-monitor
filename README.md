@@ -215,12 +215,18 @@ containers and their OOM/restart state; stopped CPU/I/O values are unknown. Sele
 compare that sample with host temperature and PSI; incident review reads the
 same saved evidence after a reboot. Expanded rows and timestamp choices survive
 live refreshes. Unknown and stale samples are labelled rather than treated as
-healthy. Only tracked projects raise warnings: OOM, unhealthy healthcheck,
+healthy; rows without a complete live sample are shown in italic lilac, and an
+unavailable Docker states why (socket permission, missing socket, timeout and
+so on). Incident review locates the 2 MB of container records that end at the
+incident, so an incident early in a day's file still finds them. Only tracked projects raise warnings: OOM, unhealthy healthcheck,
 zombies, a restart since the previous sample, or at least 4 D-state processes
 (8 for event log entries, matching the host thresholds). An old restart count
 alone is not a warning. Process CPU is the ps lifetime average, so a long-lived
 process that just spiked may not rank in the top 5. These are diagnostic clues,
 not proof of a freeze.
+
+Each container row takes roughly 0.4 KB: eight containers every 30 seconds add
+about 10 MB a day before compression, about 130 MB over the 14 raw days.
 
 The collector queries a local Docker Unix socket through the selected Docker
 context (or `DOCKER_HOST`). TCP/SSH daemons are reported unavailable: host PID

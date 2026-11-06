@@ -362,3 +362,33 @@ class ContainerDetailWidgetTests(unittest.TestCase):
         self.assertLess(app.container_list.measure(Gtk.Orientation.HORIZONTAL, -1)[0], 400)
         dropdown.set_selected(0)
         self.assertEqual(app.container_selections['abc'], '1')
+
+    def test_n8_open_history_menu_is_detected_so_refresh_defers_rebuild(self):
+        from gi.repository import GLib
+
+        def pump():
+            for _ in range(20):
+                while GLib.MainContext.default().pending():
+                    GLib.MainContext.default().iteration(False)
+
+        Gtk.init()
+        app = freeze_watch.FreezeWatch(start_hidden=True)
+        app.container_list = Gtk.ListBox()
+        history = [{'container': 'worker', 'container_id': 'abc', 'timestamp': str(n), 'epoch': str(n),
+                    'process_status': 'ok', 'process_sample': '[]'} for n in range(2)]
+        app._append_container_row(history[-1], history, [], expanded=True)
+        window = Gtk.Window()
+        window.set_child(app.container_list)
+        window.present()
+        pump()
+        self.assertFalse(app._container_popup_open())
+        dropdown = app.container_list.get_first_child().get_child().get_child().get_first_child()
+        popover = next(child for child in (dropdown.get_first_child(), dropdown.get_last_child())
+                       if isinstance(child, Gtk.Popover))
+        popover.popup()
+        pump()
+        self.assertTrue(app._container_popup_open())
+        popover.popdown()
+        pump()
+        self.assertFalse(app._container_popup_open())
+        window.destroy()

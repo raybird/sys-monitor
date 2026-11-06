@@ -163,18 +163,29 @@ inspect and top). Docker CLI context inspection only resolves the endpoint;
 no container exec, logs, full argv, environment or writes to Docker are used.
 TCP/SSH endpoints are unavailable by design; they cannot describe local PIDs.
 
-The cooperative total budget is 6 seconds; individual socket operations time
-out after at most 0.5 seconds. The shell kills a helper that exceeds 8 seconds
-(with a 1-second kill grace). At most 32 overview containers and 8 deep
-containers are selected each round. Deep candidates rotate by 30-second time
-buckets and take priority. Remaining overview slots walk the entire sorted
+The helper's total budget is 6 seconds and is enforced by a wall-clock alarm
+around each request, so a daemon that trickles bytes is cut off too; individual
+socket operations also time out after at most 0.5 seconds. Rows finished before
+the budget ran out are kept and the remaining containers are reported as
+`unavailable_or_timeout` with state `partial`. The shell still kills a helper
+that exceeds 8 seconds (with a 1-second kill grace). At most 32 overview
+containers and 8 deep containers are selected each round. Deep candidates
+advance by a persistent cursor over the sorted tracked running containers and
+take priority, so every tracked container is reached whatever the sampling
+period. Remaining overview slots walk the entire sorted
 container list from a persistent cursor, skipping only candidates already
 selected for deep sampling. This prevents stopped/OOM containers from being
-permanently excluded when the priority set is stable. The cursor is stored
-as reserved metadata in the counter cache and resets with that cache.
-Oversized responses are rejected above 2 MB. A slow stream can exceed the
-cooperative budget, but the outer process limit still protects host sampling.
-This is a maximum latency bound, not a measured production overhead guarantee.
+permanently excluded when the priority set is stable. Both cursors are
+stored as reserved metadata in the counter cache and reset with that cache.
+Oversized responses are rejected above 2 MB. This is a maximum latency bound,
+not a measured production overhead guarantee.
+
+When Docker cannot be queried, the state line names the reason:
+`unavailable:permission`, `no_socket`, `no_daemon`, `nonlocal`, `timeout` or
+`error` from the helper, and `unavailable:timeout` or `helper_failed` when the
+shell had to stop or could not run it. The dashboard spells the reason out.
+The empty row written in that case has the same values whichever side writes
+it.
 
 Deep sampling asks Docker top for `pid,stat,pcpu,pmem,comm`. It keeps the union
 of the top 5 CPU, top 5 memory, and first 5 D-state processes, at most 15.
@@ -187,7 +198,11 @@ raw usage and limit (including cache, unlike the Docker CLI's adjusted view).
 
 Block read/write counters sum Read/Write device entries in
 `blkio_stats.io_service_bytes_recursive`; empty accounting is unknown, not zero.
-The rate is a difference divided by elapsed sample epoch seconds. ID and
+The rate is a difference divided by the time between the two stats reads,
+taken from the `read` timestamp Docker returns with each stats response; the
+loop's epoch is used only when that timestamp is missing or unusable (a
+stopped container reports year 1). CPU, I/O rates and percentages are rounded
+to 2, 1 and 2 decimals. ID and
 StartedAt must match the previous sample, counters must not decrease, and time
 must advance. A missing sample resets the baseline. Listing failure, outer helper timeout, cache write failure and collector restart also invalidate it; recovery starts with unknown rates. The 0600 atomic
 `docker-counters.json` cache stores only counters/identity, not process data.
@@ -198,6 +213,13 @@ sample, and status/reason codes. All evidence therefore participates in the
 existing daily rotation, 14-day compression and 90-day archive expiry. Old
 files render the absent fields as unknown. Empty or unavailable snapshots have
 an empty container name to prevent resurrecting old containers in the UI.
+
+Disk budget: one container row is roughly 0.4 KB, so eight containers every 30
+seconds add about 10 MB a day before compression, about 130 MB over the 14 raw
+days. Host totals in the metrics file (`docker_containers`, tracked counts and
+`tracked_processes`) cover only the containers sampled in that round: above 32
+containers, or above 8 tracked running containers for process counts, they are
+a subset.
 The listing includes running containers and stopped containers of selected projects. Inspect precedes stats so OOM/restart/state evidence survives stats failure; stopped containers are not queried for stats/top. The original host container/task totals count only running rows. Partial overview samples explicitly report `partial`. Query failures do not
 stop host metrics. Docker anomaly events cover tracked projects only: OOM,
 unhealthy, Z above 0, a restart count above the previous sample of the same
@@ -205,11 +227,13 @@ container ID (no baseline after a collector restart or an unavailable sample),
 or D at the host WARN threshold of 8. The event text records D as a threshold
 flag rather than a count, so a fluctuating D does not repeat the event.
 
-The dashboard reads at most 2 MB of the matching Docker TSV. Each expanded
+The live dashboard reads at most 2 MB of the newest Docker TSV. Incident review
+instead locates, by binary search on the epoch column, the 2 MB that end at the
+incident, so an incident early in a large file still finds its rows. Each expanded
 container offers at most 60 saved samples from that file, selected by full
 container ID (name fallback for legacy records). It aligns each sample with
 the most recent host metric at or before its timestamp within 45 seconds;
-otherwise it marks a gap. History is bounded to the available file tail, does
+otherwise it marks a gap. History is bounded to that 2 MB window, does
 not promise an uninterrupted 30-minute history, and does not cross file
 rotation or transparently decompress archives. The last container sample time
 is visible and gaps above 60 seconds relative to host samples are labelled.

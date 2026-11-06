@@ -256,10 +256,14 @@ record_docker_sample() {
     tracked_process_count=0
     tracked_zombie_count=0
 
-    if output="$(timeout -k 1s 8s "${python_bin}" "${probe}" "${timestamp}" "${epoch}" "${compose_project}" "${state_dir}" 2>/dev/null)"; then
+    local probe_status=0
+    output="$(timeout -k 1s 8s "${python_bin}" "${probe}" "${timestamp}" "${epoch}" "${compose_project}" "${state_dir}" 2>/dev/null)" ||
+        probe_status=$?
+    if (( probe_status == 0 )); then
         docker_state="${output%%$'\n'*}"
         rows="${output#*$'\n'}"
-        if [[ "${docker_state}" == "unavailable" ]]; then
+        # The helper names the reason, for example unavailable:permission.
+        if [[ "${docker_state}" == unavailable* ]]; then
             rm -f -- "${state_dir}/docker-counters.json"
         fi
         printf '%s\n' "${rows}" >> "${docker_log}"
@@ -277,6 +281,12 @@ record_docker_sample() {
         read -r docker_container_count docker_task_count tracked_container_count \
             tracked_task_count tracked_process_count tracked_zombie_count <<< "${summary}"
     else
+        # 124 is timeout's own status; anything else is the helper failing.
+        if (( probe_status == 124 || probe_status == 137 )); then
+            docker_state="unavailable:timeout"
+        else
+            docker_state="unavailable:helper_failed"
+        fi
         rm -f -- "${state_dir}/docker-counters.json"
         # An explicit empty sample prevents the UI from presenting old containers
         # as current after a timeout. The main host loop continues regardless.
