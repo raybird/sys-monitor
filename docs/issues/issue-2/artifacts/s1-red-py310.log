@@ -1,0 +1,45 @@
+F
+======================================================================
+FAIL: test_s1_read_time_parses_rfc3339nano_without_python_311 (test_container_probe.IntegratedReviewFollowupTests) (text='2026-11-06T00:00:00.1234Z')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 559, in test_s1_read_time_parses_rfc3339nano_without_python_311
+    self.assertAlmostEqual(probe.read_time({'read': text}, 0), expected, places=5)
+AssertionError: 0 != 1793923200.1234 within 5 places (1793923200.1234 difference)
+
+======================================================================
+FAIL: test_s1_read_time_parses_rfc3339nano_without_python_311 (test_container_probe.IntegratedReviewFollowupTests) (text='2026-11-06T00:00:00.123456789Z')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 559, in test_s1_read_time_parses_rfc3339nano_without_python_311
+    self.assertAlmostEqual(probe.read_time({'read': text}, 0), expected, places=5)
+AssertionError: 0 != 1793923200.123456 within 5 places (1793923200.123456 difference)
+
+======================================================================
+FAIL: test_s1_read_time_parses_rfc3339nano_without_python_311 (test_container_probe.IntegratedReviewFollowupTests) (text='2026-11-06T00:00:00Z')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 559, in test_s1_read_time_parses_rfc3339nano_without_python_311
+    self.assertAlmostEqual(probe.read_time({'read': text}, 0), expected, places=5)
+AssertionError: 0 != 1793923200.0 within 5 places (1793923200.0 difference)
+
+======================================================================
+FAIL: test_s1_read_time_parses_rfc3339nano_without_python_311 (test_container_probe.IntegratedReviewFollowupTests) (text='2026-11-06T08:00:00.5+08:00')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 559, in test_s1_read_time_parses_rfc3339nano_without_python_311
+    self.assertAlmostEqual(probe.read_time({'read': text}, 0), expected, places=5)
+AssertionError: 0 != 1793923200.5 within 5 places (1793923200.5 difference)
+
+======================================================================
+FAIL: test_s2_rates_divide_by_each_containers_read_time (test_container_probe.ReviewFollowupTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 373, in test_s2_rates_divide_by_each_containers_read_time
+    self.assertEqual(rows[0]['read_bps'], 100.0)
+AssertionError: 33.3 != 100.0
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.003s
+
+FAILED (failures=5)

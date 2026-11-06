@@ -122,6 +122,34 @@
   - 用 grep 確認：`read_tsv_before` 只在 refresh 的回顧分支使用；`container_summary` 只在 `_append_container_row` 使用；`docker_state_label` 只在 refresh 使用。
   - `Engine.get` 的 SIGALRM 只在 helper 自己的行程內生效，helper 由 shell 以獨立行程執行。
 
+## 整合後審查修正（M1、N1、S1、S2、N2～N7、CI，2026-11-06）
+
+- 規格來源：使用者 2026-11-06 回覆「都依照建議修」；SCN-006、007 依此修訂（核准 commit 145a341）。
+- 紅燈命令：`env -u DISPLAY -u WAYLAND_DISPLAY GDK_BACKEND=x11 GSK_RENDERER=cairo xvfb-run -a /usr/bin/python3 -m unittest test_container_probe.IntegratedReviewFollowupTests test_container_probe.HardTimeoutTest test_container_probe.CollectorIntegrationTests test_freeze_watch.ContainerReviewFollowupTests test_window_layout.ContainerDetailWidgetTests`（在 tests/ 下），exit 1，3 個失敗（[artifacts/integrated-red.log](artifacts/integrated-red.log)）：
+  - M1／N1：用真實 shell 收集器跑 5 次容器採樣（ok、helper 失敗、ok、helper 失敗、ok 且 worker 重啟次數 1→2）。結果是 3 筆事件，預期 2 筆：
+    - db 的 unhealthy 在每次失敗之後都重寫（N1）。
+    - worker 跨過失敗那一輪的重啟沒有寫入事件（M1）。
+  - M1（儀表板）：歷史是 restart 1、NA、2 時，最新列沒有標示醒目色，因為拿 NA 那筆比較。
+  - N3：詳情顯示「CPU：未知%」。
+- S1 在 Python 3.10 才會紅。用 `UV_PYTHON_INSTALL_DIR=<scratchpad> uv python install 3.10` 取得 3.10.16，只裝在 scratchpad、不動使用者的 uv 安裝。
+  - 紅燈（[artifacts/s1-red-py310.log](artifacts/s1-red-py310.log)）：4 種格式全部解析失敗而退回後備值，包括 `.5+08:00`；`test_s2_rates_divide_by_each_containers_read_time` 也失敗，得到 33.3。
+  - 綠燈（[artifacts/s1-green-py310.log](artifacts/s1-green-py310.log)）：3.10 下 18 個 helper 測試 OK。
+- 一開始就是綠的：
+  - N5 的 shell 原因碼斷言（`unavailable:timeout`、`unavailable:helper_failed`）：這個行為在 9dcf8e3 已經正確，前一輪 reviewer 手動驗過，這次只補上自動化保護。
+  - N7 的對照：舊讀法（檔案尾端加 epoch 篩選）在 8 MB 檔案找不到早期事故，這個斷言證明 S6 修正前確實會失敗。
+- 實作中的一次失誤：第一次實作時，awk 把 printf 參數裡的 `>` 當成輸出重導向，所以完全沒有寫出事件。加上括號後修正，確認沒有殘留檔案。
+- 最小實作後全綠：同組加上 `ContainerAlertTests`，15 個測試 OK（[artifacts/integrated-green.log](artifacts/integrated-green.log)）。
+- 完整檢查：`env -u DISPLAY -u WAYLAND_DISPLAY bash scripts/check.sh`，exit 0，126 個測試 OK，0 個跳過，All checks passed（[artifacts/check-integrated-review.log](artifacts/check-integrated-review.log)）。126 = 122 + 4（新測試）。
+- 其他修正：
+  - N2：EOF 哨兵值改成 `math.inf`。檔案小於約 1.8 GB 時行為不變，所以沒有紅燈。
+  - N4：兩個測試檔的 `if __name__` 移到檔尾。
+  - N6：改用 `get_mapped()`，既有的 N8 GUI 測試仍然通過。
+  - S2：docs/troubleshooting.md 補上原因碼對照與處置，並寫明遠端 endpoint 是刻意不支援。
+  - CI：`.github/workflows/ci.yml` 加裝 `python3-gi-cairo`。main 從 bd56e94 起，issue #1 的對比測試在 CI 就因為缺 cairo 而失敗。
+- 沒有自動化測試的部分：shell 重啟基準超過一天沒更新就刪除，沒有測試涵蓋，屬於程式碼推理範圍。
+- 重構：no-op。
+- 影響分析：GitNexus 仍無法使用。用 grep 確認 `previous_restart_sample` 只在 `_append_container_row` 使用；shell 的兩段 awk 都在 `record_docker_sample` 內。
+
 ## 驗收對照
 
 | Scenario | 證據 | 結論 |
@@ -131,7 +159,7 @@
 | SCN-003 | CounterTests、RecoveryRegressionTests；真實第二輪有速率；S2 讀取時間測試 | 通過 |
 | SCN-004 | `process_sample` 上限與欄位測試；真實 top 解析；文件標明生命週期平均的限制 | 通過；差分改善追蹤 #4 |
 | SCN-005 | 不讀未來樣本與缺口標示的測試；跨重啟 QA；S6 `read_tsv_before` 測試（8 MB 以上檔案的早期事故） | 通過 |
-| SCN-006 | `test_dstate_uses_host_elevated_threshold`、`test_known_anomalies_only_are_flagged`、shell 事件測試；警示截圖 | 通過 |
-| SCN-007 | `test_untracked_containers_are_never_flagged`、`test_restart_flags_only_an_increase_over_previous_sample`、shell 事件測試（3 次採樣只寫 2 筆）；QA 事件紀錄 | 通過 |
+| SCN-006 | `test_dstate_uses_host_elevated_threshold`、`test_known_anomalies_only_are_flagged`、shell 事件測試、M1 跨失敗輪次的 shell 與 GUI 測試；警示截圖 | 通過 |
+| SCN-007 | `test_untracked_containers_are_never_flagged`、`test_restart_flags_only_an_increase_over_previous_sample`、shell 事件測試（3 次採樣只寫 2 筆）、N1 失敗輪次不重寫事件；QA 事件紀錄 | 通過 |
 | SCN-008 | 卡住 60 秒的 helper 在 11 秒內終止，主機樣本照常落盤；不可用時明確寫空快照；遠端 endpoint 被拒；真實失效注入很快回 unavailable；S4 原因、S8 慢速 daemon 測試 | 通過；高負載成本已豁免 |
 | SCN-009 | 舊 11 欄檔案測試；沿用 docker-*.tsv 輪替；uninstall 會刪 probe；程序只用 comm；N4 空列一致測試；磁碟預算寫入文件 | 通過 |

@@ -1,0 +1,84 @@
+libEGL warning: DRI3 error: Could not get DRI3 device
+libEGL warning: Ensure your X server supports DRI3 to get accelerated rendering
+F.....F.....F/usr/lib/python3/dist-packages/gi/events.py:803: DeprecationWarning: 'asyncio.AbstractEventLoopPolicy' is deprecated and slated for removal in Python 3.16
+  AbstractEventLoopPolicy = getattr(asyncio, "AbstractEventLoopPolicy", object)
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+
+(process:1885920): Gtk-CRITICAL **: 14:34:10.836: Unable to register the application: GDBus.Error:org.freedesktop.DBus.Error.NoReply: Message recipient disconnected from message bus without replying
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+/usr/lib/python3/dist-packages/gi/events.py:890: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+  if not isinstance(_get_event_loop_policy(), GLibEventLoopPolicy):
+.
+======================================================================
+FAIL: test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events (test_container_probe.IntegratedReviewFollowupTests.test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_container_probe.py", line 547, in test_m1_n1_failed_rounds_neither_drop_the_restart_baseline_nor_repeat_events
+    self.assertEqual(len(alerts), 2, alerts)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 3 != 2 : ['2026-11-06T14:33:47+08:00\tWARN\tDocker anomaly: db:oom=false,restarts=0,Z=0,D>=8=no,health=unhealthy;', '2026-11-06T14:33:54+08:00\tWARN\tDocker anomaly: db:oom=false,restarts=0,Z=0,D>=8=no,health=unhealthy;', '2026-11-06T14:34:01+08:00\tWARN\tDocker anomaly: db:oom=false,restarts=0,Z=0,D>=8=no,health=unhealthy;']
+
+======================================================================
+FAIL: test_n3_detail_has_no_percent_after_unknown_cpu (test_freeze_watch.ContainerReviewFollowupTests.test_n3_detail_has_no_percent_after_unknown_cpu)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_freeze_watch.py", line 491, in test_n3_detail_has_no_percent_after_unknown_cpu
+    self.assertIn('CPU：未知（', text)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'CPU：未知（' not found in '採樣：未知 · 狀態 未知\nID：未知 · 容器狀態 未知\nProject／service：未知／未知\nCPU：未知%（區間使用率，100% 為一個核心）\n記憶體／上限：未知\nTasks 未知 · 程序 未知 · D 未知 · Z 未知\nOOM 未知 · 重啟 未知 · Health 未知\n累計 block I/O：讀 未知 B · 寫 未知 B\n讀取 未知 · 寫入 未知\nBlock I/O 不含快取命中的所有檔案讀取；未知可能是首次採樣、計數器重置或核心未提供。\n主機資料缺口：沒有此前 45 秒內的對照樣本\n程序 CPU 為 ps 生命週期平均；記憶體 % 以主機 RAM 為分母；PID 為主機 PID。\n程序：未知（未知）\n高負載與事故時間重疊僅是線索，不代表因果。'
+
+======================================================================
+FAIL: test_m1_restart_compares_with_the_latest_sample_that_has_a_count (test_window_layout.ContainerDetailWidgetTests.test_m1_restart_compares_with_the_latest_sample_that_has_a_count)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/kevin/Documents/RCodes/sys-monitor/tests/test_window_layout.py", line 377, in test_m1_restart_compares_with_the_latest_sample_that_has_a_count
+    self.assertTrue(detail.has_css_class('warm'))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 14 tests in 23.398s
+
+FAILED (failures=3)

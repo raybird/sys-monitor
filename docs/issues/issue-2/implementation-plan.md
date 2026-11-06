@@ -29,13 +29,14 @@
    - S8 helper 內部預算成為硬上限並保留部分結果（SCN-008）。
    - S9、N1～N8：測試保護欄位一致、截斷首行、數值四捨五入、deep 輪替改游標、不可用空列一致、測試不重複執行、check.sh 不查真實 Docker、計數口徑、開啟的下拉選單不被重建關掉。
    - 證據：紅綠燈與完整 check.sh 122 個測試 OK，見 evidence.md「審查建議修正」。
-8. ⏳ **整合後審查修正**（依賴 7；使用者 2026-11-06「都依照建議修」）
+8. ✅ **整合後審查修正**（依賴 7；使用者 2026-11-06「都依照建議修」）
    - M1：收集器的重啟基準改為同一容器 ID 最近一筆有效樣本；儀表板跳過沒有重啟次數的樣本（SCN-006、007）。
    - N1：Docker 不可用的一輪不重設已記錄的異常；事件文字的 Z 改為旗標（SCN-007）。
    - S1：Docker 讀取時間自行正規化後解析，不依賴 Python 3.11 的 `fromisoformat`（SCN-003）。
    - S2：docs/troubleshooting.md 補上不可用原因與遠端 endpoint 的說明。
    - N2～N7：EOF 哨兵值、詳情的「未知%」、測試類別位置、shell 原因碼測試、改用 get_mapped、S6 舊讀法對照。
    - CI 安裝 python3-gi-cairo。
+   - 證據：紅綠燈（含 Python 3.10）與完整 check.sh 126 個測試 OK，見 evidence.md「整合後審查修正」。
 9. 📝 **交付**（全部 Scenario，依賴 1～8）
    - 由獨立 reviewer 在本地審查固定的 BASE（origin/main 與分支的 merge-base）與 HEAD，報告存在本目錄。
    - 不自行合併；合併後依 Gate 豁免紀錄觀察高負載採樣。
