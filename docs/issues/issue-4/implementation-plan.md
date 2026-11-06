@@ -21,7 +21,7 @@
    - 完成判準：各狀態的文字都有斷言。
 4. ⏳ **真實對照組與文件**（全部 Scenario，依賴 1～3）
    - 內容：
-     - 用已知負載的程序做對照組。在容器內啟動程序前，先取得使用者同意。
+     - 用主機上自己啟動、已知負載的程序做對照組（TBD-2）。
      - 更新 `README.md`、`README.zh-TW.md`、`docs/architecture.md` 的口徑說明。
    - 驗證：對照組的區間 CPU 接近預期；`env -u DISPLAY -u WAYLAND_DISPLAY bash scripts/check.sh` 全過、沒有跳過。
    - 完成判準：對照組數值、查詢方式與文件更新都記錄在本檔或 evidence.md。
