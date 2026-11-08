@@ -716,8 +716,10 @@ while true; do
     previous_busy_ms="${busy_ms_total}"
     previous_throttle="${throttle_count}"
 
+    # Exclude this scan's own ps by PID; other ps processes remain visible.
     top_processes="$(
-        "${ps_bin}" -eo comm=,%cpu=,%mem= --sort=-%cpu 2>/dev/null |
+        (exec "${ps_bin}" --pid "${BASHPID}" --deselect \
+            -o comm=,%cpu=,%mem= --sort=-%cpu 2>/dev/null) |
             head -5 |
             awk '
                 {
@@ -735,7 +737,8 @@ while true; do
     # Ranked by memory as well, because the process that exhausted the machine
     # is rarely the one burning CPU at the moment it gives up.
     top_memory_processes="$(
-        "${ps_bin}" -eo comm=,%cpu=,%mem= --sort=-%mem 2>/dev/null |
+        (exec "${ps_bin}" --pid "${BASHPID}" --deselect \
+            -o comm=,%cpu=,%mem= --sort=-%mem 2>/dev/null) |
             head -5 |
             awk '
                 {
