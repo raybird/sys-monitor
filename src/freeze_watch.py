@@ -110,6 +110,15 @@ def newest_file(pattern: str) -> Path | None:
     return max(files, key=lambda item: item.stat().st_mtime)
 
 
+def parsed_tsv_row(line: str, fields: list[str]) -> dict[str, str] | None:
+    parts = line.split("\t")
+    minimum = 24 if fields is METRICS_FIELDS else 11
+    if (len(parts) < minimum or "\x00" in line or not parts[0]
+            or not parts[1].isdigit()):
+        return None
+    return dict(zip(fields, parts + ["NA"] * (len(fields) - len(parts))))
+
+
 def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_000,
                   min_rows: int = 0) -> list[dict[str, str]]:
     if path is None:
@@ -121,16 +130,14 @@ def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_00
         # data rather than as None, which every caller here would render literally.
         rows = []
         incomplete = False
-        minimum = 24 if fields is METRICS_FIELDS else 11
         for line in lines:
             if line.startswith("timestamp\t"):
                 continue
-            parts = line.split("\t")
-            if (len(parts) < minimum or "\x00" in line or
-                    not parts[1].isdigit() or not parts[0]):
+            row = parsed_tsv_row(line, fields)
+            if row is None:
                 incomplete = True
                 continue
-            rows.append(dict(zip(fields, parts + ["NA"] * (len(fields) - len(parts)))))
+            rows.append(row)
         if incomplete and rows:
             rows[-1]["_incomplete"] = "yes"
         # Row width varies (GPU JSON), so a fixed byte window can hold far
@@ -189,13 +196,11 @@ def read_tsv_before(path: Path | None, fields: list[str], end_epoch: int,
         return []
     lines = data.decode("utf-8", errors="replace").splitlines()
     rows = []
-    minimum = 24 if fields is METRICS_FIELDS else 11
     for line in lines:
-        parts = line.split("\t")
-        if (len(parts) < minimum or "\x00" in line or not parts[1].isdigit()
-                or int(parts[1]) > end_epoch):
+        row = parsed_tsv_row(line, fields)
+        if row is None or int(row["epoch"]) > end_epoch:
             continue
-        rows.append(dict(zip(fields, parts + ["NA"] * (len(fields) - len(parts)))))
+        rows.append(row)
     return rows
 
 
@@ -222,7 +227,8 @@ def empty_sample_status(path: Path | None) -> str:
         return ""
     lines = tail_text(path).splitlines()
     return "資料不完整；沒有有效採樣" if any(
-        line and not line.startswith("timestamp\t") for line in lines
+        line and not line.startswith("timestamp\t") and
+        parsed_tsv_row(line, METRICS_FIELDS) is None for line in lines
     ) else ""
 
 

@@ -23,3 +23,4 @@
 - 修正後 `FREEZE_WATCH_SKIP_GUI_TESTS=1 ./scripts/check.sh` 於沙箱外通過（154 項，14 項因無顯示器略過，含安裝及解除安裝）；`GSK_RENDERER=cairo xvfb-run -a /usr/bin/python3 -m unittest tests.test_window_layout -v` 通過（21 項）。
 - 2026-11-12 第二輪獨立審查 [review-eaa5cc1.md](review-eaa5cc1.md) 判定 RETURN TO execute-task。補前次 boot 查詢失敗不影響目前 boot 採樣的 shell 對照、重複核心訊息的原始命中數與去重後事件數區別，以及零有效樣本在安全報告中的損壞提示；`FREEZE_WATCH_SKIP_GUI_TESTS=1 ./scripts/check.sh` 通過（155 項，14 項因無顯示器略過，含新增 shell 對照），Xvfb GUI 21 項通過。
 - 2026-11-12 第三輪獨立審查 [review-6a7cb63.md](review-6a7cb63.md) 判定 RETURN TO execute-task：合法但全在事故時間窗外的樣本誤報損壞。新增反向對照先失敗，修正後 `/usr/bin/python3 -m unittest tests.test_diagnostic_report tests.test_freeze_watch` 通過（58 項），Xvfb GUI 21 項通過；shell、安裝及其他模組未再變更，沿用上一筆完整檢查結果。
+- 2026-11-12 第四輪獨立審查 [review-ddf7d2d.md](review-ddf7d2d.md) 判定 RETURN TO execute-task：歷史回顧 UI 仍誤報事故窗口外合法樣本。新增有效列反向測試先紅後綠；將 TSV 列判準集中於 `parsed_tsv_row`。`FREEZE_WATCH_SKIP_GUI_TESTS=1 ./scripts/check.sh` 於沙箱外通過（155 項，14 項因無顯示器略過，含安裝及 shell 檢查）；Xvfb GUI 21 項通過。

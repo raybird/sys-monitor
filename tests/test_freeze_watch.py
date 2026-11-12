@@ -106,6 +106,11 @@ class FreezeWatchDataTests(unittest.TestCase):
         self.assertIn("資料不完整", freeze_watch.empty_sample_status(path))
         path.write_text("\t".join(freeze_watch.METRICS_FIELDS) + "\n")
         self.assertEqual(freeze_watch.empty_sample_status(path), "")
+        row = dict.fromkeys(freeze_watch.METRICS_FIELDS, "NA")
+        row.update(timestamp="2026-01-01T00:20:00+00:00", epoch="1767226800")
+        path.write_text("\t".join(freeze_watch.METRICS_FIELDS) + "\n" +
+                        "\t".join(row[field] for field in freeze_watch.METRICS_FIELDS) + "\n")
+        self.assertEqual(freeze_watch.empty_sample_status(path), "")
 
     def test_scn002_live_freshness_uses_current_time_not_container_age(self) -> None:
         row = {"epoch": "100", "timestamp": "2026-01-01T00:00:00+00:00"}

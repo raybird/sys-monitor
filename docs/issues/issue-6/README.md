@@ -90,6 +90,7 @@ Feature: 事故證據完整性與觀測狀態
 | 2026-11-12 | 第一輪獨立審查 RETURN TO execute-task；修正三項 MUST FIX，等待新提交重審。 |
 | 2026-11-12 | 第二輪獨立審查 RETURN TO execute-task；修正兩項 MUST FIX，等待新提交重審。 |
 | 2026-11-12 | 第三輪獨立審查 RETURN TO execute-task；修正事故窗口外合法資料誤報，等待新提交重審。 |
+| 2026-11-12 | 第四輪獨立審查 RETURN TO execute-task；修正歷史回顧同類誤報，等待新提交重審。 |
 
 **建立日期**: 2026-11-12
 **分級**: Medium
