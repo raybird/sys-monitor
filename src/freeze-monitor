@@ -421,28 +421,35 @@ scan_kernel_log() {
     shift 2
     local line
     local count=0
-
-    if ! "${journalctl_bin}" -k -n 0 >/dev/null 2>&1; then
-        kernel_log_state="unavailable"
-        printf '%s\tINFO\tkernel log scan unavailable\n' "${timestamp}" >> "${event_log}"
-        return
-    fi
+    local scan_status="unknown"
 
     while IFS= read -r line; do
+        if [[ "${line}" == __FREEZE_WATCH_SCAN_STATUS__* ]]; then
+            scan_status="${line#__FREEZE_WATCH_SCAN_STATUS__}"
+            continue
+        fi
         [[ -n "${line}" ]] || continue
         line="${line//$'\t'/ }"
         line="${line:0:200}"
         [[ "${line}" == "${last_kernel_alert}" ]] && continue
+        ((count >= kernel_alerts_per_scan)) && continue
         last_kernel_alert="${line}"
         kernel_alert_seen=1
         printf '%s\tKERNEL\t%s%s\n' \
             "${timestamp}" "${prefix}" "${line}" >> "${event_log}"
         count=$((count + 1))
-        ((count >= kernel_alerts_per_scan)) && break
     done < <(
         "${journalctl_bin}" "$@" -o cat --no-pager 2>/dev/null |
-            grep -aE "${kernel_alert_pattern}" || true
+            grep -aE "${kernel_alert_pattern}"
+        printf '__FREEZE_WATCH_SCAN_STATUS__%s\n' "${PIPESTATUS[0]}"
     )
+    if [[ "${scan_status}" == 0 ]]; then
+        printf '%s\tKERNEL_SCAN\tstatus=ok matches=%s\n' \
+            "${timestamp}" "${count}" >> "${event_log}"
+    else
+        kernel_log_state="unavailable"
+        printf '%s\tINFO\tkernel log scan unavailable\n' "${timestamp}" >> "${event_log}"
+    fi
 }
 
 sample_is_elevated() {

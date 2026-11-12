@@ -99,6 +99,14 @@ class FreezeWatchDataTests(unittest.TestCase):
         self.assertEqual(rows[-1]["cpu_temp_mC"], "51000")
         self.assertEqual(rows[-1]["_incomplete"], "yes")
 
+    def test_scn001_only_damaged_rows_are_not_called_empty(self) -> None:
+        path = freeze_watch.STATE_DIR / "metrics-damaged.tsv"
+        path.write_bytes(("\t".join(freeze_watch.METRICS_FIELDS) + "\n").encode() +
+                         b"broken\t\x00\n")
+        self.assertIn("資料不完整", freeze_watch.empty_sample_status(path))
+        path.write_text("\t".join(freeze_watch.METRICS_FIELDS) + "\n")
+        self.assertEqual(freeze_watch.empty_sample_status(path), "")
+
     def test_scn002_live_freshness_uses_current_time_not_container_age(self) -> None:
         row = {"epoch": "100", "timestamp": "2026-01-01T00:00:00+00:00"}
         self.assertEqual(freeze_watch.sample_freshness(row, 160), "")

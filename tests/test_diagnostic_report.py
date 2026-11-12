@@ -93,15 +93,25 @@ class DiagnosticReportTests(unittest.TestCase):
                         "\t".join(row[field] for field in watch.METRICS_FIELDS) + "\n")
         (watch.STATE_DIR / "events.log").write_text(
             f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=ok\n"
+            f"{stamp}\tKERNEL_SCAN\tstatus=ok matches=0\n"
             f"{stamp}\tGAP\tsampling stalled\n")
         incident = watch.Incident(stamp, "GAP", "sampling stalled", path)
         report = watch.diagnostic_report(incident)
         self.assertIn("版本：0.9.1", report)
         self.assertIn("GPU 程序採樣：未啟用", report)
-        self.assertIn("核心紀錄：可讀，未命中", report)
+        self.assertIn(f"核心紀錄：截至 {stamp} 掃描成功，零命中；其後未知", report)
         self.assertNotIn(str(path), report)
         (watch.STATE_DIR / "events.log").write_text(
             f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=unavailable\n"
+            f"{stamp}\tGAP\tsampling stalled\n")
+        self.assertIn("核心紀錄：不可讀", watch.diagnostic_report(incident))
+        (watch.STATE_DIR / "events.log").write_text(
+            f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=ok\n"
+            f"{stamp}\tGAP\tsampling stalled\n")
+        self.assertIn("核心紀錄：初始可讀；掃描未知", watch.diagnostic_report(incident))
+        (watch.STATE_DIR / "events.log").write_text(
+            f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=ok\n"
+            f"{stamp}\tINFO\tkernel log scan unavailable\n"
             f"{stamp}\tGAP\tsampling stalled\n")
         self.assertIn("核心紀錄：不可讀", watch.diagnostic_report(incident))
 

@@ -206,6 +206,8 @@ def read_tsv_tail(pattern: str, fields: list[str]) -> list[dict[str, str]]:
 def sample_freshness(row: dict[str, str], now: float) -> str:
     epoch = as_int(row.get("epoch"))
     if epoch is None:
+        if row.get("_incomplete") == "yes":
+            return "資料不完整；沒有有效採樣"
         return "資料缺失；尚無有效採樣"
     details = []
     if now - epoch > STALE_AFTER_SECONDS:
@@ -213,6 +215,15 @@ def sample_freshness(row: dict[str, str], now: float) -> str:
     if row.get("_incomplete") == "yes":
         details.append("資料不完整；已略過損壞列")
     return " · ".join(details)
+
+
+def empty_sample_status(path: Path | None) -> str:
+    if path is None:
+        return ""
+    lines = tail_text(path).splitlines()
+    return "資料不完整；沒有有效採樣" if any(
+        line and not line.startswith("timestamp\t") for line in lines
+    ) else ""
 
 
 class Incident(NamedTuple):
@@ -425,6 +436,7 @@ def diagnostic_report(incident: Incident) -> str:
     event_lines = tail_text(STATE_DIR / "events.log", 2_000_000).splitlines()
     version = "未知（舊紀錄未保存）"
     kernel_state = "未知（舊紀錄未保存）"
+    kernel_scan_stamp = ""
     for event_line in event_lines:
         parsed = parse_event_line(event_line)
         if parsed is None:
@@ -436,9 +448,15 @@ def diagnostic_report(incident: Incident) -> str:
             version_match = re.search(r"(?:^| )version=([0-9A-Za-z._-]+)", message)
             kernel_match = re.search(r"(?:^| )kernel=(ok|unavailable)", message)
             version = version_match.group(1) if version_match else "未知（舊紀錄未保存）"
-            kernel_state = kernel_match.group(1) if kernel_match else "未知（舊紀錄未保存）"
+            kernel_state = "初始可讀；掃描未知" if kernel_match and kernel_match.group(1) == "ok" else (
+                "unavailable" if kernel_match else "未知（舊紀錄未保存）")
+            kernel_scan_stamp = ""
+        elif event_kind == "KERNEL_SCAN" and message.startswith("status=ok"):
+            kernel_state = "ok"
+            kernel_scan_stamp = event_stamp
         elif event_kind == "INFO" and "kernel log scan unavailable" in message:
             kernel_state = "unavailable"
+            kernel_scan_stamp = ""
     count = 0
     after = 0
     gpu_states = set()
@@ -495,7 +513,8 @@ def diagnostic_report(incident: Incident) -> str:
     if kernel_state == "unavailable":
         kernel_summary = "不可讀"
     elif kernel_state == "ok":
-        kernel_summary = "可讀，已有命中" if errors else "可讀，未命中"
+        result = "已有命中" if errors else "零命中"
+        kernel_summary = f"截至 {kernel_scan_stamp} 掃描成功，{result}；其後未知"
     else:
         kernel_summary = kernel_state
     lines.append(f"核心紀錄：{kernel_summary}")
@@ -1836,6 +1855,10 @@ class FreezeWatch(Gtk.Application):
         else:
             metric_rows = read_tsv_tail("metrics-*.tsv", METRICS_FIELDS)
         latest_metric = metric_rows[-1] if metric_rows else {}
+        if not metric_rows:
+            source = self.selected_incident.metrics_path if reviewing else newest_file("metrics-*.tsv")
+            if empty_sample_status(source):
+                latest_metric = {"_incomplete": "yes"}
 
         if reviewing:
             # Reviewing means showing what was recorded, never what the sensors
@@ -1868,6 +1891,7 @@ class FreezeWatch(Gtk.Application):
             status = "監測資料需注意"
             status_detail = freshness
         elif reviewing and latest_metric.get("_incomplete") == "yes":
+            status = "監測資料需注意"
             status_detail += " · 資料不完整；已略過損壞列"
 
         # The tray always shows the machine as it is now. A review is something
