@@ -113,6 +113,11 @@ class DiagnosticReportTests(unittest.TestCase):
                          b"2026-10-05T00:00:00+00:00\t\x00\n")
         incident = watch.Incident(stamp, "GAP", "sampling stalled", path)
         self.assertIn("取樣資料不完整", watch.diagnostic_report(incident))
+        row = dict.fromkeys(watch.METRICS_FIELDS, "NA")
+        row.update(timestamp="2026-10-05T00:20:00+00:00", epoch="1791159600")
+        path.write_text("\t".join(watch.METRICS_FIELDS) + "\n" +
+                        "\t".join(row[field] for field in watch.METRICS_FIELDS) + "\n")
+        self.assertNotIn("取樣資料不完整", watch.diagnostic_report(incident))
         (watch.STATE_DIR / "events.log").write_text(
             f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=ok\n"
             f"{stamp}\tKERNEL_SCAN\tstatus=ok matches=1 recorded=0\n"

@@ -340,7 +340,7 @@ def incident_paths(incident: Incident, include_after: bool = False) -> list[Path
     return [incident.metrics_path] if incident.metrics_path is not None else []
 
 
-def metric_window(path: Path, start: int, finish: int) -> list[dict[str, str]]:
+def metric_window(path: Path, start: int, finish: int) -> tuple[list[dict[str, str]], bool]:
     rows = []
     incomplete = False
     try:
@@ -357,7 +357,7 @@ def metric_window(path: Path, start: int, finish: int) -> list[dict[str, str]]:
         pass
     if incomplete and rows:
         rows[-1]["_incomplete"] = "yes"
-    return rows
+    return rows, incomplete
 
 
 def incident_rows(incident: Incident) -> list[dict[str, str]]:
@@ -366,7 +366,7 @@ def incident_rows(incident: Incident) -> list[dict[str, str]]:
     for path in reversed(incident_paths(incident)):
         samples = read_tsv_path(path, METRICS_FIELDS, 4_000_000)
         if end is not None and samples and (as_int(samples[0].get("epoch")) or 0) > end - INCIDENT_WINDOW_SECONDS:
-            samples = metric_window(path, end - INCIDENT_WINDOW_SECONDS, end)
+            samples, _ = metric_window(path, end - INCIDENT_WINDOW_SECONDS, end)
         rows = samples + rows
         if samples and end is not None and (as_int(samples[0].get("epoch")) or 0) < end - INCIDENT_WINDOW_SECONDS:
             break
@@ -466,9 +466,8 @@ def diagnostic_report(incident: Incident) -> str:
     gpu_states = set()
     incomplete = False
     for path in incident_paths(incident, include_after=True):
-        samples = metric_window(path, start, finish)
-        if not samples and empty_sample_status(path):
-            incomplete = True
+        samples, path_incomplete = metric_window(path, start, finish)
+        incomplete |= path_incomplete
         for row in samples:
             epoch = as_int(row["epoch"])
             gpu_states.add(row.get("gpu_processes", "NA"))
