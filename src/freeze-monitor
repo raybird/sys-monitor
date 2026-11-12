@@ -421,6 +421,7 @@ scan_kernel_log() {
     shift 2
     local line
     local count=0
+    local raw_count=0
     local scan_status="unknown"
 
     while IFS= read -r line; do
@@ -431,6 +432,7 @@ scan_kernel_log() {
         [[ -n "${line}" ]] || continue
         line="${line//$'\t'/ }"
         line="${line:0:200}"
+        raw_count=$((raw_count + 1))
         [[ "${line}" == "${last_kernel_alert}" ]] && continue
         ((count >= kernel_alerts_per_scan)) && continue
         last_kernel_alert="${line}"
@@ -444,11 +446,15 @@ scan_kernel_log() {
         printf '__FREEZE_WATCH_SCAN_STATUS__%s\n' "${PIPESTATUS[0]}"
     )
     if [[ "${scan_status}" == 0 ]]; then
-        printf '%s\tKERNEL_SCAN\tstatus=ok matches=%s\n' \
-            "${timestamp}" "${count}" >> "${event_log}"
+        printf '%s\tKERNEL_SCAN\tstatus=ok matches=%s recorded=%s\n' \
+            "${timestamp}" "${raw_count}" "${count}" >> "${event_log}"
     else
-        kernel_log_state="unavailable"
-        printf '%s\tINFO\tkernel log scan unavailable\n' "${timestamp}" >> "${event_log}"
+        if [[ -z "${prefix}" ]]; then
+            kernel_log_state="unavailable"
+            printf '%s\tINFO\tkernel log scan unavailable\n' "${timestamp}" >> "${event_log}"
+        else
+            printf '%s\tINFO\tprevious boot kernel log scan unavailable\n' "${timestamp}" >> "${event_log}"
+        fi
     fi
 }
 

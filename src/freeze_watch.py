@@ -437,6 +437,7 @@ def diagnostic_report(incident: Incident) -> str:
     version = "未知（舊紀錄未保存）"
     kernel_state = "未知（舊紀錄未保存）"
     kernel_scan_stamp = ""
+    kernel_scan_matches = 0
     for event_line in event_lines:
         parsed = parse_event_line(event_line)
         if parsed is None:
@@ -451,9 +452,12 @@ def diagnostic_report(incident: Incident) -> str:
             kernel_state = "初始可讀；掃描未知" if kernel_match and kernel_match.group(1) == "ok" else (
                 "unavailable" if kernel_match else "未知（舊紀錄未保存）")
             kernel_scan_stamp = ""
+            kernel_scan_matches = 0
         elif event_kind == "KERNEL_SCAN" and message.startswith("status=ok"):
             kernel_state = "ok"
             kernel_scan_stamp = event_stamp
+            match = re.search(r"\bmatches=(\d+)\b", message)
+            kernel_scan_matches = int(match.group(1)) if match else 0
         elif event_kind == "INFO" and "kernel log scan unavailable" in message:
             kernel_state = "unavailable"
             kernel_scan_stamp = ""
@@ -462,7 +466,10 @@ def diagnostic_report(incident: Incident) -> str:
     gpu_states = set()
     incomplete = False
     for path in incident_paths(incident, include_after=True):
-        for row in metric_window(path, start, finish):
+        samples = metric_window(path, start, finish)
+        if not samples and empty_sample_status(path):
+            incomplete = True
+        for row in samples:
             epoch = as_int(row["epoch"])
             gpu_states.add(row.get("gpu_processes", "NA"))
             incomplete |= row.get("_incomplete") == "yes"
@@ -509,11 +516,14 @@ def diagnostic_report(incident: Incident) -> str:
         lines.append(f"{datetime.fromtimestamp(epoch).astimezone().isoformat()} · {category}")
         errors += 1
     if not errors:
-        lines.append("此區間沒有可讀取的核心錯誤紀錄；不代表沒有核心錯誤。")
+        if kernel_state == "ok" and kernel_scan_matches:
+            lines.append("核心掃描有命中，但本區間沒有新事件紀錄；可能已去重。")
+        else:
+            lines.append("此區間沒有可讀取的核心錯誤紀錄；不代表沒有核心錯誤。")
     if kernel_state == "unavailable":
         kernel_summary = "不可讀"
     elif kernel_state == "ok":
-        result = "已有命中" if errors else "零命中"
+        result = "有命中" if kernel_scan_matches or errors else "零命中"
         kernel_summary = f"截至 {kernel_scan_stamp} 掃描成功，{result}；其後未知"
     else:
         kernel_summary = kernel_state

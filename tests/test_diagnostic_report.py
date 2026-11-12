@@ -105,6 +105,20 @@ class DiagnosticReportTests(unittest.TestCase):
             f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=unavailable\n"
             f"{stamp}\tGAP\tsampling stalled\n")
         self.assertIn("核心紀錄：不可讀", watch.diagnostic_report(incident))
+
+    def test_issue6_report_marks_only_damaged_samples(self):
+        stamp = "2026-10-05T00:00:00+00:00"
+        path = watch.STATE_DIR / "metrics-damaged.tsv"
+        path.write_bytes(("\t".join(watch.METRICS_FIELDS) + "\n").encode() +
+                         b"2026-10-05T00:00:00+00:00\t\x00\n")
+        incident = watch.Incident(stamp, "GAP", "sampling stalled", path)
+        self.assertIn("取樣資料不完整", watch.diagnostic_report(incident))
+        (watch.STATE_DIR / "events.log").write_text(
+            f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=ok\n"
+            f"{stamp}\tKERNEL_SCAN\tstatus=ok matches=1 recorded=0\n"
+            f"{stamp}\tGAP\tsampling stalled\n")
+        self.assertIn("有命中", watch.diagnostic_report(incident))
+        self.assertNotIn("零命中", watch.diagnostic_report(incident))
         (watch.STATE_DIR / "events.log").write_text(
             f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=ok\n"
             f"{stamp}\tGAP\tsampling stalled\n")

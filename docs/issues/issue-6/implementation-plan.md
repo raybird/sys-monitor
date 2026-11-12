@@ -21,3 +21,4 @@
 - 程式碼精煉：保持核心日誌串流掃描，避免把整段訊息載入 shell 變數；移除巢狀條件運算式與修正提示文字。
 - 2026-11-12 第一輪獨立審查 [review-0c489cb.md](review-0c489cb.md) 判定 RETURN TO execute-task。修正三項 MUST FIX：成功掃描有明確事件與結果，報告僅陳述截至該次掃描的零命中；只有損壞列也標資料不完整；README 核准狀態一致。新增未掃描／掃描失敗／零有效列對照測試，先紅後綠。
 - 修正後 `FREEZE_WATCH_SKIP_GUI_TESTS=1 ./scripts/check.sh` 於沙箱外通過（154 項，14 項因無顯示器略過，含安裝及解除安裝）；`GSK_RENDERER=cairo xvfb-run -a /usr/bin/python3 -m unittest tests.test_window_layout -v` 通過（21 項）。
+- 2026-11-12 第二輪獨立審查 [review-eaa5cc1.md](review-eaa5cc1.md) 判定 RETURN TO execute-task。補前次 boot 查詢失敗不影響目前 boot 採樣的 shell 對照、重複核心訊息的原始命中數與去重後事件數區別，以及零有效樣本在安全報告中的損壞提示；`FREEZE_WATCH_SKIP_GUI_TESTS=1 ./scripts/check.sh` 通過（155 項，14 項因無顯示器略過，含新增 shell 對照），Xvfb GUI 21 項通過。

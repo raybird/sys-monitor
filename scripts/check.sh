@@ -518,8 +518,8 @@ cat > "${stub_journalctl}" <<'STUB'
 #!/usr/bin/env bash
 case "$*" in
     *--show-cursor*) printf -- '-- cursor: s=stub;i=1;b=stub\n'; exit 0 ;;
-    *"-b -1"*) cat "${FREEZE_WATCH_STUB_PREVIOUS_BOOT:-/dev/null}"; exit 0 ;;
-    *--after-cursor*) cat "${FREEZE_WATCH_STUB_KERNEL:-/dev/null}"; exit 0 ;;
+    *"-b -1"*) cat "${FREEZE_WATCH_STUB_PREVIOUS_BOOT:-/dev/null}"; exit "${FREEZE_WATCH_STUB_PREVIOUS_STATUS:-0}" ;;
+    *--after-cursor*) cat "${FREEZE_WATCH_STUB_KERNEL:-/dev/null}"; exit "${FREEZE_WATCH_STUB_CURRENT_STATUS:-0}" ;;
 esac
 exit "${FREEZE_WATCH_STUB_PROBE_STATUS:-0}"
 STUB
@@ -593,6 +593,17 @@ run_kernel_scan "${test_root}/state-kernel-flood" \
     FREEZE_WATCH_STUB_KERNEL="${test_root}/kernel-flood.txt"
 test "$(grep -c $'\tKERNEL\t' \
     "${test_root}/state-kernel-flood/freeze-monitor/events.log")" = "3"
+grep -q $'KERNEL_SCAN\tstatus=ok matches=' \
+    "${test_root}/state-kernel-flood/freeze-monitor/events.log"
+
+printf '%s\n%s\n' \
+    'INFO: task worker:1 blocked for more than 122 seconds.' \
+    'INFO: task worker:1 blocked for more than 122 seconds.' \
+    > "${test_root}/kernel-duplicate.txt"
+run_kernel_scan "${test_root}/state-kernel-duplicate" \
+    FREEZE_WATCH_STUB_KERNEL="${test_root}/kernel-duplicate.txt"
+grep -q $'KERNEL_SCAN\tstatus=ok matches=2 recorded=1' \
+    "${test_root}/state-kernel-duplicate/freeze-monitor/events.log"
 
 # The previous boot is only read when the machine went down without shutting
 # down, otherwise every restart would replay the same lines.
@@ -602,6 +613,14 @@ run_kernel_scan "${test_root}/state-kernel-freeze" \
     FREEZE_WATCH_STUB_PREVIOUS_BOOT="${test_root}/kernel-alerts.txt"
 grep -q 'previous boot: .*GPU HANG' \
     "${test_root}/state-kernel-freeze/freeze-monitor/events.log"
+
+seed_previous_session "${test_root}/state-kernel-previous-failed" \
+    "00000000-0000-0000-0000-000000000000" ""
+run_kernel_scan "${test_root}/state-kernel-previous-failed" \
+    FREEZE_WATCH_STUB_PREVIOUS_STATUS=1 \
+    FREEZE_WATCH_STUB_KERNEL="${test_root}/kernel-alerts.txt"
+grep -q 'GPU HANG' "${test_root}/state-kernel-previous-failed/freeze-monitor/events.log"
+grep -q $'KERNEL_SCAN\tstatus=ok' "${test_root}/state-kernel-previous-failed/freeze-monitor/events.log"
 
 seed_previous_session "${test_root}/state-kernel-clean" \
     "00000000-0000-0000-0000-000000000000" "STOP"
