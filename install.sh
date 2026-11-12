@@ -343,6 +343,7 @@ install -d -m 0755 \
     "${autostart_dir}" \
     "${icon_theme_dir}/scalable/apps" "${icon_theme_dir}/symbolic/apps"
 install -m 0755 "${source_dir}/src/freeze-monitor" "${bin_dir}/freeze-monitor"
+install -m 0644 "${source_dir}/VERSION" "${data_dir}/VERSION"
 install -m 0755 "${source_dir}/src/freeze-monitor-maintain" "${bin_dir}/freeze-monitor-maintain"
 install -m 0755 "${source_dir}/src/freeze-watch" "${bin_dir}/freeze-watch"
 install -m 0755 "${source_dir}/src/freeze-watch-session" "${bin_dir}/freeze-watch-session"

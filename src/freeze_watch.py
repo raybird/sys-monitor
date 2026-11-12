@@ -9,6 +9,7 @@ import math
 import os
 import re
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, NamedTuple
@@ -46,6 +47,7 @@ EVENT_HISTORY_LIMIT = 12
 # Matches the collector's default. Only used to turn busy milliseconds into a
 # share of the interval, so a mismatch misreads that one figure and nothing else.
 SAMPLE_INTERVAL_SECONDS = 10
+STALE_AFTER_SECONDS = 60
 WINDOW_MIN_WIDTH = 720
 WINDOW_MIN_HEIGHT = 540
 WINDOW_PREFERRED_WIDTH = 1040
@@ -117,10 +119,20 @@ def read_tsv_path(path: Path | None, fields: list[str], byte_limit: int = 160_00
         lines = tail_text(path, byte_limit).splitlines()
         # restval keeps a row written before a column existed reading as missing
         # data rather than as None, which every caller here would render literally.
-        rows = [
-            row for row in csv.DictReader(lines, fieldnames=fields, delimiter="\t", restval="NA")
-            if row.get("timestamp") and row["timestamp"] != "timestamp"
-        ]
+        rows = []
+        incomplete = False
+        minimum = 24 if fields is METRICS_FIELDS else 11
+        for line in lines:
+            if line.startswith("timestamp\t"):
+                continue
+            parts = line.split("\t")
+            if (len(parts) < minimum or "\x00" in line or
+                    not parts[1].isdigit() or not parts[0]):
+                incomplete = True
+                continue
+            rows.append(dict(zip(fields, parts + ["NA"] * (len(fields) - len(parts)))))
+        if incomplete and rows:
+            rows[-1]["_incomplete"] = "yes"
         # Row width varies (GPU JSON), so a fixed byte window can hold far
         # fewer rows than the view needs; widen until it does or the file ends.
         try:
@@ -176,16 +188,31 @@ def read_tsv_before(path: Path | None, fields: list[str], end_epoch: int,
     except OSError:
         return []
     lines = data.decode("utf-8", errors="replace").splitlines()
-    rows = csv.DictReader(lines, fieldnames=fields, delimiter="\t", restval="NA")
-    return [
-        row for row in rows
-        if row.get("timestamp") and row["timestamp"] != "timestamp"
-        and (as_int(row.get("epoch")) or 0) <= end_epoch
-    ]
+    rows = []
+    minimum = 24 if fields is METRICS_FIELDS else 11
+    for line in lines:
+        parts = line.split("\t")
+        if (len(parts) < minimum or "\x00" in line or not parts[1].isdigit()
+                or int(parts[1]) > end_epoch):
+            continue
+        rows.append(dict(zip(fields, parts + ["NA"] * (len(fields) - len(parts)))))
+    return rows
 
 
 def read_tsv_tail(pattern: str, fields: list[str]) -> list[dict[str, str]]:
     return read_tsv_path(newest_file(pattern), fields, min_rows=HISTORY_ROWS)
+
+
+def sample_freshness(row: dict[str, str], now: float) -> str:
+    epoch = as_int(row.get("epoch"))
+    if epoch is None:
+        return "資料缺失；尚無有效採樣"
+    details = []
+    if now - epoch > STALE_AFTER_SECONDS:
+        details.append(f"資料過期；最後採樣 {row.get('timestamp', '未知')}")
+    if row.get("_incomplete") == "yes":
+        details.append("資料不完整；已略過損壞列")
+    return " · ".join(details)
 
 
 class Incident(NamedTuple):
@@ -304,14 +331,21 @@ def incident_paths(incident: Incident, include_after: bool = False) -> list[Path
 
 def metric_window(path: Path, start: int, finish: int) -> list[dict[str, str]]:
     rows = []
+    incomplete = False
     try:
         with path.open(errors="replace") as handle:
             for row in csv.DictReader(handle, delimiter="\t"):
                 epoch = as_int(row.get("epoch"))
-                if epoch is not None and start <= epoch <= finish:
+                if (epoch is None or sum(value is not None for value in row.values()) < 24
+                        or "\x00" in "".join(str(value) for value in row.values())):
+                    incomplete = True
+                    continue
+                if start <= epoch <= finish:
                     rows.append(row)
     except OSError:
         pass
+    if incomplete and rows:
+        rows[-1]["_incomplete"] = "yes"
     return rows
 
 
@@ -388,11 +422,32 @@ def diagnostic_report(incident: Incident) -> str:
              "範圍：前 30 分鐘／後 5 分鐘；未記錄的區間不推測。",
              "隱私：只列數值與核心錯誤分類，省略檔案路徑、程序名稱與參數。", "",
              "取樣（溫度 m°C、記憶體 KiB、PSI %、磁碟忙碌 ms）", "timestamp\t" + "\t".join(REPORT_FIELDS)]
+    event_lines = tail_text(STATE_DIR / "events.log", 2_000_000).splitlines()
+    version = "未知（舊紀錄未保存）"
+    kernel_state = "未知（舊紀錄未保存）"
+    for event_line in event_lines:
+        parsed = parse_event_line(event_line)
+        if parsed is None:
+            continue
+        event_stamp, event_kind, message = parsed
+        if event_stamp == incident.timestamp and event_kind == incident.kind and message == incident.message:
+            break
+        if event_kind == "START":
+            version_match = re.search(r"(?:^| )version=([0-9A-Za-z._-]+)", message)
+            kernel_match = re.search(r"(?:^| )kernel=(ok|unavailable)", message)
+            version = version_match.group(1) if version_match else "未知（舊紀錄未保存）"
+            kernel_state = kernel_match.group(1) if kernel_match else "未知（舊紀錄未保存）"
+        elif event_kind == "INFO" and "kernel log scan unavailable" in message:
+            kernel_state = "unavailable"
     count = 0
     after = 0
+    gpu_states = set()
+    incomplete = False
     for path in incident_paths(incident, include_after=True):
         for row in metric_window(path, start, finish):
             epoch = as_int(row["epoch"])
+            gpu_states.add(row.get("gpu_processes", "NA"))
+            incomplete |= row.get("_incomplete") == "yes"
             values = []
             for field in REPORT_FIELDS:
                 value = row.get(field, "NA")
@@ -409,9 +464,18 @@ def diagnostic_report(incident: Incident) -> str:
         lines.append("此區間沒有可讀取的取樣。")
     if not after:
         lines.append("事件後沒有可讀取的取樣。")
+    if gpu_states == {"disabled"}:
+        gpu_state = "未啟用"
+    elif not gpu_states or gpu_states == {"NA"}:
+        gpu_state = "未知"
+    else:
+        gpu_state = "已記錄；詳情留於本機"
+    lines.extend([f"收集器版本：{version}", f"GPU 程序採樣：{gpu_state}"])
+    if incomplete:
+        lines.append("取樣資料不完整；已略過損壞列。")
     lines.extend(["", "相關核心錯誤（分類保留，原始訊息未匯出）"])
     errors = 0
-    for line in tail_text(STATE_DIR / "events.log", 2_000_000).splitlines():
+    for line in event_lines:
         parsed = parse_event_line(line)
         if parsed is None:
             continue
@@ -428,6 +492,13 @@ def diagnostic_report(incident: Incident) -> str:
         errors += 1
     if not errors:
         lines.append("此區間沒有可讀取的核心錯誤紀錄；不代表沒有核心錯誤。")
+    if kernel_state == "unavailable":
+        kernel_summary = "不可讀"
+    elif kernel_state == "ok":
+        kernel_summary = "可讀，已有命中" if errors else "可讀，未命中"
+    else:
+        kernel_summary = kernel_state
+    lines.append(f"核心紀錄：{kernel_summary}")
     return "\n".join(lines) + "\n"
 
 
@@ -1792,6 +1863,12 @@ class FreezeWatch(Gtk.Application):
                     )
         level = temperature_level(temperatures)
         status, status_detail = level_copy(level)
+        freshness = "" if reviewing else sample_freshness(latest_metric, time.time())
+        if freshness:
+            status = "監測資料需注意"
+            status_detail = freshness
+        elif reviewing and latest_metric.get("_incomplete") == "yes":
+            status_detail += " · 資料不完整；已略過損壞列"
 
         # The tray always shows the machine as it is now. A review is something
         # the reader asked for; the indicator is not.

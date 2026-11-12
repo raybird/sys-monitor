@@ -1,5 +1,14 @@
 # Troubleshooting
 
+## Dashboard shows stale or incomplete data
+
+The live view marks samples older than 60 seconds as stale and shows the last
+valid sample time. An incomplete label means a damaged TSV row was skipped;
+the last valid sample remains visible. Check the `freeze-monitor` user service
+and its state directory before interpreting earlier values as current.
+Older sessions may show an unknown collector version or kernel access state in
+the diagnostic report because those values were not recorded then.
+
 ## The installer reports missing GTK dependencies
 
 The bindings are distribution packages, so an interpreter from pyenv, asdf,

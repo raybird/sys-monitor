@@ -50,6 +50,7 @@ fi
 readonly gpu_sampler
 readonly state_dir="${XDG_STATE_HOME:-${HOME}/.local/state}/freeze-monitor"
 readonly event_log="${state_dir}/events.log"
+readonly version_file="${XDG_DATA_HOME:-${HOME}/.local/share}/freeze-watch/VERSION"
 
 # Preference order, most specific driver first. A generic fallback such as
 # acpitz is deliberately absent: it usually reports a board or ambient sensor,
@@ -421,6 +422,12 @@ scan_kernel_log() {
     local line
     local count=0
 
+    if ! "${journalctl_bin}" -k -n 0 >/dev/null 2>&1; then
+        kernel_log_state="unavailable"
+        printf '%s\tINFO\tkernel log scan unavailable\n' "${timestamp}" >> "${event_log}"
+        return
+    fi
+
     while IFS= read -r line; do
         [[ -n "${line}" ]] || continue
         line="${line//$'\t'/ }"
@@ -620,9 +627,14 @@ else
     printf '%s\tINFO\tkernel log unavailable; add this user to the adm or systemd-journal group\n' \
         "${start_timestamp}" >> "${event_log}"
 fi
-printf '%s\tSTART\tboot=%s metrics=%s interval=%ss flush=%ss\n' \
+collector_version="unknown"
+if [[ -r "${version_file}" ]]; then
+    collector_version="$(tr -d '[:space:]' < "${version_file}")"
+fi
+printf '%s\tSTART\tboot=%s metrics=%s interval=%ss flush=%ss version=%s kernel=%s\n' \
     "${start_timestamp}" "${boot_id}" "${metrics_log}" \
     "${interval_seconds}" "$((interval_seconds * flush_every_samples))" \
+    "${collector_version}" "${kernel_log_state}" \
     >> "${event_log}"
 sync -d "${metrics_log}" "${event_log}" 2>/dev/null || true
 

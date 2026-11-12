@@ -45,8 +45,8 @@ class FreezeWatchDataTests(unittest.TestCase):
         path = freeze_watch.STATE_DIR / "metrics-test.tsv"
         first = {field: "NA" for field in freeze_watch.METRICS_FIELDS}
         second = dict(first)
-        first.update({"timestamp": "2026-01-01T00:00:00+00:00", "cpu_temp_mC": "51000"})
-        second.update({"timestamp": "2026-01-01T00:00:10+00:00", "cpu_temp_mC": "52000"})
+        first.update({"timestamp": "2026-01-01T00:00:00+00:00", "epoch": "1767225600", "cpu_temp_mC": "51000"})
+        second.update({"timestamp": "2026-01-01T00:00:10+00:00", "epoch": "1767225610", "cpu_temp_mC": "52000"})
         lines = [
             "\t".join(freeze_watch.METRICS_FIELDS),
             "\t".join(first[field] for field in freeze_watch.METRICS_FIELDS),
@@ -68,7 +68,7 @@ class FreezeWatchDataTests(unittest.TestCase):
             : freeze_watch.METRICS_FIELDS.index("top_processes") + 1
         ]
         row = {field: "NA" for field in older_fields}
-        row.update({"timestamp": "2026-01-01T00:00:00+00:00", "cpu_temp_mC": "51000"})
+        row.update({"timestamp": "2026-01-01T00:00:00+00:00", "epoch": "1767225600", "cpu_temp_mC": "51000"})
         path = freeze_watch.STATE_DIR / "metrics-older.tsv"
         path.write_text(
             "\t".join(older_fields)
@@ -84,6 +84,28 @@ class FreezeWatchDataTests(unittest.TestCase):
         # Absent rather than None, so the dashboard renders it as missing data.
         self.assertEqual(rows[0]["dstate_count"], "NA")
         self.assertEqual(rows[0]["io_psi_full_avg10"], "NA")
+
+    def test_scn001_damaged_tail_does_not_replace_last_valid_old_row(self) -> None:
+        fields = freeze_watch.METRICS_FIELDS[:24]
+        row = dict.fromkeys(fields, "NA")
+        row.update(timestamp="2026-01-01T00:00:00+00:00", epoch="1767225600",
+                   cpu_temp_mC="51000")
+        path = freeze_watch.STATE_DIR / "metrics-damaged.tsv"
+        path.write_bytes(("\t".join(fields) + "\n" +
+                          "\t".join(row[field] for field in fields) + "\n").encode() +
+                         b"2026-01-01T00:00:10+00:00\t\x00\x00\n")
+        rows = freeze_watch.read_tsv_path(path, freeze_watch.METRICS_FIELDS)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[-1]["cpu_temp_mC"], "51000")
+        self.assertEqual(rows[-1]["_incomplete"], "yes")
+
+    def test_scn002_live_freshness_uses_current_time_not_container_age(self) -> None:
+        row = {"epoch": "100", "timestamp": "2026-01-01T00:00:00+00:00"}
+        self.assertEqual(freeze_watch.sample_freshness(row, 160), "")
+        self.assertIn("資料過期", freeze_watch.sample_freshness(row, 161))
+        self.assertIn("最後採樣", freeze_watch.sample_freshness(row, 161))
+        self.assertIn("資料缺失", freeze_watch.sample_freshness({}, 161))
+        self.assertEqual(freeze_watch.sample_freshness(row, 100), "")
 
 
 class IncidentTests(unittest.TestCase):

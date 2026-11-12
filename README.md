@@ -22,6 +22,8 @@ the period immediately before a forced reboot.
 - dedicated full-colour launcher icon and symbolic tray icons
 - GTK4 dashboard with a 30-minute thermal ribbon and stall markers
 - incident review showing the half hour before any recorded freeze or stall
+- warns when live samples are over 60 seconds old or saved rows are damaged;
+  diagnostic reports identify available evidence
 - daily log rotation, compression after 14 days, expiration after 90 days
 - user-level systemd services; no root daemon
 
@@ -150,7 +152,7 @@ Collected data is stored in:
 錯誤分類；缺資料會明示。缺少正常停止紀錄僅代表非正常關機／疑似當機，不能
 單憑此條件確認硬體或 GPU 故障。
 
-最後驗證日期：2026-11-04（GPU 程序紀錄）。
+最後驗證日期：2026-11-12（GPU 程序紀錄與資料狀態）。
 
 ## Uninstall
 

@@ -84,6 +84,27 @@ class DiagnosticReportTests(unittest.TestCase):
         self.assertNotIn("secret", text)
         self.assertNotIn("/home", text)
 
+    def test_issue6_report_distinguishes_observation_states(self):
+        stamp = "2026-10-05T00:00:00+00:00"
+        path = watch.STATE_DIR / "metrics-observation.tsv"
+        row = dict.fromkeys(watch.METRICS_FIELDS, "NA")
+        row.update(timestamp=stamp, epoch="1791158400", gpu_processes="disabled")
+        path.write_text("\t".join(watch.METRICS_FIELDS) + "\n" +
+                        "\t".join(row[field] for field in watch.METRICS_FIELDS) + "\n")
+        (watch.STATE_DIR / "events.log").write_text(
+            f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=ok\n"
+            f"{stamp}\tGAP\tsampling stalled\n")
+        incident = watch.Incident(stamp, "GAP", "sampling stalled", path)
+        report = watch.diagnostic_report(incident)
+        self.assertIn("版本：0.9.1", report)
+        self.assertIn("GPU 程序採樣：未啟用", report)
+        self.assertIn("核心紀錄：可讀，未命中", report)
+        self.assertNotIn(str(path), report)
+        (watch.STATE_DIR / "events.log").write_text(
+            f"{stamp}\tSTART\tboot=x metrics={path} version=0.9.1 kernel=unavailable\n"
+            f"{stamp}\tGAP\tsampling stalled\n")
+        self.assertIn("核心紀錄：不可讀", watch.diagnostic_report(incident))
+
 
 if __name__ == "__main__":
     unittest.main()

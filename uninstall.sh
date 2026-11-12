@@ -72,6 +72,7 @@ rm -f -- \
     "${data_dir}/freeze_watch.py" \
     "${data_dir}/container_probe.py" \
     "${data_dir}/freeze_gpu.py" \
+    "${data_dir}/VERSION" \
     "${data_dir}/uninstall.sh" \
     "${applications_dir}/com.raybird.FreezeWatch.desktop" \
     "${autostart_dir}/com.raybird.FreezeWatch-autostart.desktop" \
