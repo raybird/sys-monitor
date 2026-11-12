@@ -155,6 +155,30 @@ class IncidentTests(unittest.TestCase):
             "\n".join(lines) + "\n", encoding="utf-8"
         )
 
+    def test_issue6_review_ignores_damage_after_incident_window(self) -> None:
+        start = 1_700_000_000
+        path = self.write_metrics("metrics-old.tsv", start, 1)
+        later = datetime.fromtimestamp(start + 1200).isoformat()
+        with path.open("ab") as handle:
+            handle.write(f"{later}\t".encode() + b"\x00\n")
+        incident = freeze_watch.Incident(datetime.fromtimestamp(start).isoformat(),
+                                         "GAP", "sampling stalled", path)
+        rows = freeze_watch.incident_rows(incident)
+        self.assertEqual(len(rows), 1)
+        self.assertNotIn("_incomplete", rows[0])
+
+        # The first valid row can predate the 30-minute window, bypassing the
+        # normal full-file fallback while the damaged tail remains later.
+        old = self.write_metrics("metrics-old.tsv", start - 3600, 1)
+        current = self.write_metrics("metrics-current.tsv", start, 1)
+        with old.open("ab") as handle:
+            handle.write(current.read_bytes().split(b"\n", 1)[1])
+            handle.write(f"{later}\t".encode() + b"\x00\n")
+        incident = incident._replace(metrics_path=old)
+        rows = freeze_watch.incident_rows(incident)
+        self.assertEqual(len(rows), 1)
+        self.assertNotIn("_incomplete", rows[0])
+
     def test_reads_a_freeze_and_the_file_it_names(self) -> None:
         metrics = self.write_metrics("metrics-old.tsv", 1_700_000_000, 5)
         self.write_events(

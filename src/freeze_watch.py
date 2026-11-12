@@ -355,7 +355,9 @@ def metric_window(path: Path, start: int, finish: int) -> tuple[list[dict[str, s
                 epoch = as_int(row.get("epoch"))
                 if (epoch is None or sum(value is not None for value in row.values()) < 24
                         or "\x00" in "".join(str(value) for value in row.values())):
-                    incomplete = True
+                    position = epoch if epoch is not None else epoch_of(row.get("timestamp") or "")
+                    if position is None or start <= position <= finish:
+                        incomplete = True
                     continue
                 if start <= epoch <= finish:
                     rows.append(row)
@@ -369,16 +371,27 @@ def metric_window(path: Path, start: int, finish: int) -> tuple[list[dict[str, s
 def incident_rows(incident: Incident) -> list[dict[str, str]]:
     end = incident_end(incident)
     rows: list[dict[str, str]] = []
+    damaged = False
     for path in reversed(incident_paths(incident)):
         samples = read_tsv_path(path, METRICS_FIELDS, 4_000_000)
         if end is not None and samples and (as_int(samples[0].get("epoch")) or 0) > end - INCIDENT_WINDOW_SECONDS:
-            samples, _ = metric_window(path, end - INCIDENT_WINDOW_SECONDS, end)
+            samples, path_damaged = metric_window(path, end - INCIDENT_WINDOW_SECONDS, end)
+            damaged |= path_damaged
+        elif end is not None and (any(row.get("_incomplete") == "yes" for row in samples)
+                                  or not samples and empty_sample_status(path)):
+            damaged |= metric_window(path, end - INCIDENT_WINDOW_SECONDS, end)[1]
         rows = samples + rows
         if samples and end is not None and (as_int(samples[0].get("epoch")) or 0) < end - INCIDENT_WINDOW_SECONDS:
             break
     if end is None:
         return rows[-HISTORY_ROWS:]
-    return [row for row in rows if end - INCIDENT_WINDOW_SECONDS <= (as_int(row.get("epoch")) or 0) <= end]
+    start = end - INCIDENT_WINDOW_SECONDS
+    result = [row for row in rows if start <= (as_int(row.get("epoch")) or 0) <= end]
+    for row in result:
+        row.pop("_incomplete", None)
+    if damaged and result:
+        result[-1]["_incomplete"] = "yes"
+    return result
 
 
 def gpu_summary(value: str | None) -> str:
@@ -1872,7 +1885,12 @@ class FreezeWatch(Gtk.Application):
         latest_metric = metric_rows[-1] if metric_rows else {}
         if not metric_rows:
             source = self.selected_incident.metrics_path if reviewing else newest_file("metrics-*.tsv")
-            if empty_sample_status(source):
+            if reviewing and (end := incident_end(self.selected_incident)) is not None:
+                damaged = any(metric_window(path, end - INCIDENT_WINDOW_SECONDS, end)[1]
+                              for path in incident_paths(self.selected_incident))
+            else:
+                damaged = bool(empty_sample_status(source))
+            if damaged:
                 latest_metric = {"_incomplete": "yes"}
 
         if reviewing:
