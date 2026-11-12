@@ -73,7 +73,7 @@ Feature: 事故證據完整性與觀測狀態
 - [implementation-plan.md](implementation-plan.md)
 
 ## Gherkin 核准紀錄
-**核准 commit**: 待提交。
+**核准 commit**: 0c489cbdf3ef2fa8c40a9086016643d6cce6b4f1。
 **核准來源**: 2026-11-12 使用者回覆「依照建議核准」，承接助理建議的 SCN-001～003、60 秒門檻與 GPU 採樣維持目前設定。
 
 | Scenario | 核准日期 | 狀態 |
@@ -92,8 +92,9 @@ Feature: 事故證據完整性與觀測狀態
 | 2026-11-12 | 第三輪獨立審查 RETURN TO execute-task；修正事故窗口外合法資料誤報，等待新提交重審。 |
 | 2026-11-12 | 第四輪獨立審查 RETURN TO execute-task；修正歷史回顧同類誤報，等待新提交重審。 |
 | 2026-11-12 | 第五輪獨立審查 RETURN TO execute-task；修正事故窗外損壞列誤報，等待新提交重審。 |
+| 2026-11-12 | 第六輪獨立審查 PASS，報告為 review-6fb7f26.md；等待合併。 |
 
 **建立日期**: 2026-11-12
 **分級**: Medium
 **風險**: Medium
-**狀態**: 實作與驗證完成，待提交及獨立審查
+**狀態**: 待合併
